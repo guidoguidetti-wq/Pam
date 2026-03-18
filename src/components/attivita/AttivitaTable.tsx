@@ -20,7 +20,7 @@ import {
 import { Badge } from '@/components/ui/badge'
 import { TipiAttivitaDialog } from './TipiAttivitaDialog'
 import { AttivitaForm } from './AttivitaForm'
-import { formatOre, calcolaDurata, coloreCommittente } from '@/lib/utils'
+import { formatOre, calcolaDurata, coloreCommittente, formatValuta } from '@/lib/utils'
 import { Plus, Settings2, Pencil, Loader2 } from 'lucide-react'
 
 interface Committente { id: number; ragioneSociale: string }
@@ -32,13 +32,15 @@ interface AttivitaRow {
   oraFine: string
   oreErogate: number | null
   committenteId: number
-  clienteId: number
+  clienteId: number | null
   progettoId: number | null
   tipoAttivitaId: number
   descrizione: string | null
   fatturabile: boolean
+  prezzoUnitario: number | null
+  valoreAttivita: number | null
   committente: { ragioneSociale: string }
-  cliente: { ragioneSociale: string }
+  cliente: { ragioneSociale: string } | null
   tipoAttivita: { codice: string }
   progetto: { nome: string } | null
 }
@@ -170,6 +172,8 @@ export function AttivitaTable({ committenti, tipiAttivita: initialTipi }: Attivi
                 <th className="text-left px-3 py-2 font-medium">Progetto</th>
                 <th className="text-left px-3 py-2 font-medium">Tipo</th>
                 <th className="text-left px-3 py-2 font-medium">Descrizione</th>
+                <th className="text-right px-3 py-2 font-medium hidden lg:table-cell">€/h</th>
+                <th className="text-right px-3 py-2 font-medium hidden lg:table-cell">Valore</th>
                 <th className="text-center px-3 py-2 font-medium">Fatt.</th>
                 <th className="px-3 py-2" />
               </tr>
@@ -190,8 +194,12 @@ export function AttivitaTable({ committenti, tipiAttivita: initialTipi }: Attivi
                       <span className="font-medium" style={{ color: colore }}>
                         {row.committente.ragioneSociale}
                       </span>
-                      <span className="text-muted-foreground"> › </span>
-                      {row.cliente.ragioneSociale}
+                      {row.cliente && (
+                        <>
+                          <span className="text-muted-foreground"> › </span>
+                          {row.cliente.ragioneSociale}
+                        </>
+                      )}
                     </td>
                     <td className="px-3 py-2 text-muted-foreground">
                       {row.progetto?.nome ?? '—'}
@@ -201,6 +209,12 @@ export function AttivitaTable({ committenti, tipiAttivita: initialTipi }: Attivi
                     </td>
                     <td className="px-3 py-2 text-muted-foreground max-w-xs truncate">
                       {row.descrizione ?? '—'}
+                    </td>
+                    <td className="px-3 py-2 text-right tabular-nums text-xs hidden lg:table-cell">
+                      {row.prezzoUnitario != null ? formatValuta(row.prezzoUnitario) : '—'}
+                    </td>
+                    <td className="px-3 py-2 text-right tabular-nums text-xs hidden lg:table-cell">
+                      {row.valoreAttivita != null ? formatValuta(row.valoreAttivita) : '—'}
                     </td>
                     <td className="px-3 py-2 text-center">
                       {row.fatturabile ? (

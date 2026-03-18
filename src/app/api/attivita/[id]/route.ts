@@ -3,46 +3,38 @@ import { auth } from '@/lib/auth'
 import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
 import { coloreCommittente } from '@/lib/utils'
-
-// ── helpers ────────────────────────────────────────────────────────────────
+import { getTariffa } from '@/lib/tariffe'
 
 function minsToHHMM(mins: number): string {
-  const h = Math.floor(mins / 60)
-  const m = mins % 60
-  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
+  return `${String(Math.floor(mins / 60)).padStart(2, '0')}:${String(mins % 60).padStart(2, '0')}`
 }
-
 function epochTimeToMins(d: Date): number {
   const [h, m] = d.toISOString().substring(11, 16).split(':').map(Number)
   return h * 60 + m
 }
 
-// ── schema ─────────────────────────────────────────────────────────────────
-
 const schema = z
   .object({
-    dataAttivita: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Formato data non valido'),
+    dataAttivita: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
     oraInizio: z.string().regex(/^\d{2}:\d{2}$/).optional(),
     oraFine: z.string().regex(/^\d{2}:\d{2}$/).optional(),
     oreErogate: z.number().int().positive().optional(),
     committenteId: z.number().int().positive(),
-    clienteId: z.number().int().positive(),
+    clienteId: z.number().int().positive().nullable().optional(),
     progettoId: z.number().int().positive().nullable().optional(),
     tipoAttivitaId: z.number().int().positive(),
     descrizione: z.string().nullable().optional(),
     noteInterne: z.string().nullable().optional(),
     fatturabile: z.boolean().default(true),
+    prezzoUnitario: z.number().nullable().optional(),
+    valoreAttivita: z.number().nullable().optional(),
   })
-  .refine(
-    (d) => (d.oraInizio && d.oraFine) || typeof d.oreErogate === 'number',
-    { message: 'Specificare ora inizio/fine oppure ore erogate' }
-  )
-  .refine(
-    (d) => !(d.oraInizio && d.oraFine) || d.oraFine > d.oraInizio,
-    { message: 'Ora fine deve essere successiva a ora inizio', path: ['oraFine'] }
-  )
-
-// ── serializer ─────────────────────────────────────────────────────────────
+  .refine((d) => (d.oraInizio && d.oraFine) || typeof d.oreErogate === 'number', {
+    message: 'Specificare ora inizio/fine oppure ore erogate',
+  })
+  .refine((d) => !(d.oraInizio && d.oraFine) || d.oraFine > d.oraInizio, {
+    message: 'Ora fine deve essere successiva a ora inizio', path: ['oraFine'],
+  })
 
 type AttivitaWithRel = {
   id: bigint
@@ -51,14 +43,16 @@ type AttivitaWithRel = {
   oraFine: Date
   oreErogate: number | null
   committenteId: number
-  clienteId: number
+  clienteId: number | null
   progettoId: number | null
   tipoAttivitaId: number
   descrizione: string | null
   noteInterne: string | null
   fatturabile: boolean
+  prezzoUnitario: { toString(): string } | null
+  valoreAttivita: { toString(): string } | null
   committente: { ragioneSociale: string }
-  cliente: { ragioneSociale: string }
+  cliente: { ragioneSociale: string } | null
   tipoAttivita: { codice: string; descrizione: string }
   progetto: { nome: string } | null
 }
@@ -80,6 +74,8 @@ function serialize(row: AttivitaWithRel) {
     descrizione: row.descrizione,
     noteInterne: row.noteInterne,
     fatturabile: row.fatturabile,
+    prezzoUnitario: row.prezzoUnitario ? parseFloat(row.prezzoUnitario.toString()) : null,
+    valoreAttivita: row.valoreAttivita ? parseFloat(row.valoreAttivita.toString()) : null,
     committente: row.committente,
     cliente: row.cliente,
     tipoAttivita: row.tipoAttivita,
@@ -100,18 +96,13 @@ const includeRelations = {
   progetto: { select: { nome: true } },
 }
 
-// ── GET ────────────────────────────────────────────────────────────────────
-
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth()
   if (!session) return NextResponse.json({ error: 'Non autorizzato' }, { status: 401 })
 
   const { id } = await params
   try {
-    const row = await prisma.attivita.findUnique({
-      where: { id: BigInt(id) },
-      include: includeRelations,
-    })
+    const row = await prisma.attivita.findUnique({ where: { id: BigInt(id) }, include: includeRelations })
     if (!row) return NextResponse.json({ error: 'Non trovato' }, { status: 404 })
     return NextResponse.json(serialize(row))
   } catch (err) {
@@ -119,8 +110,6 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: 'Errore interno' }, { status: 500 })
   }
 }
-
-// ── PUT ────────────────────────────────────────────────────────────────────
 
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth()
@@ -132,31 +121,45 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   if (!parsed.success)
     return NextResponse.json({ error: 'Dati non validi', details: parsed.error.issues }, { status: 422 })
 
-  const { dataAttivita, oraInizio, oraFine, oreErogate, ...rest } = parsed.data
+  const { dataAttivita, oraInizio, oraFine, oreErogate, prezzoUnitario, valoreAttivita, ...rest } = parsed.data
 
   try {
-    let finalOraInizio: string
-    let finalOraFine: string
-    let finalOreErogate: number
+    let finalOraInizio: string, finalOraFine: string, finalOreErogate: number
 
     if (oraInizio && oraFine) {
-      finalOraInizio = oraInizio
-      finalOraFine = oraFine
+      finalOraInizio = oraInizio; finalOraFine = oraFine
       const [hi, mi] = oraInizio.split(':').map(Number)
       const [hf, mf] = oraFine.split(':').map(Number)
       finalOreErogate = (hf * 60 + mf) - (hi * 60 + mi)
     } else {
       finalOreErogate = oreErogate!
-      // Cerca ultima attività del giorno escludendo quella corrente
       const lastAct = await prisma.attivita.findFirst({
         where: { dataAttivita: new Date(dataAttivita), NOT: { id: BigInt(id) } },
-        orderBy: { oraFine: 'desc' },
-        select: { oraFine: true },
+        orderBy: { oraFine: 'desc' }, select: { oraFine: true },
       })
       const startMins = lastAct ? epochTimeToMins(lastAct.oraFine) : 9 * 60
       finalOraInizio = minsToHHMM(startMins)
       finalOraFine = minsToHHMM(startMins + finalOreErogate)
     }
+
+    // Risolvi prezzo: se esplicitamente null usa null, se undefined auto-lookup
+    let finalPrezzo: number | null
+    if (prezzoUnitario !== undefined) {
+      finalPrezzo = prezzoUnitario
+    } else {
+      const tariffa = await getTariffa(
+        rest.committenteId,
+        rest.clienteId ?? null,
+        rest.tipoAttivitaId,
+        'ORARIO',
+        new Date(dataAttivita)
+      )
+      finalPrezzo = tariffa ? parseFloat(tariffa.toString()) : null
+    }
+
+    const finalValore = valoreAttivita !== undefined
+      ? valoreAttivita
+      : (finalPrezzo !== null ? finalPrezzo * (finalOreErogate / 60) : null)
 
     const result = await prisma.attivita.update({
       where: { id: BigInt(id) },
@@ -166,6 +169,8 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
         oraInizio: new Date(`1970-01-01T${finalOraInizio}:00.000Z`),
         oraFine: new Date(`1970-01-01T${finalOraFine}:00.000Z`),
         oreErogate: finalOreErogate,
+        prezzoUnitario: finalPrezzo,
+        valoreAttivita: finalValore,
       },
       include: includeRelations,
     })
@@ -175,8 +180,6 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     return NextResponse.json({ error: 'Errore interno' }, { status: 500 })
   }
 }
-
-// ── DELETE ─────────────────────────────────────────────────────────────────
 
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth()

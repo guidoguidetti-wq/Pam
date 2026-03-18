@@ -51,12 +51,14 @@ const schema = z.object({
   oraFine: z.string().optional(),
   oreErogateTesto: z.string().optional(), // "H:MM" digitato dall'utente
   committenteId: z.string().min(1, 'Obbligatorio'),
-  clienteId: z.string().min(1, 'Obbligatorio'),
+  clienteId: z.string().optional(),
   progettoId: z.string().optional(),
   tipoAttivitaId: z.string().min(1, 'Obbligatorio'),
   descrizione: z.string().optional(),
   noteInterne: z.string().optional(),
   fatturabile: z.boolean().default(true),
+  prezzoUnitarioTesto: z.string().optional(),
+  valoreAttivitaTesto: z.string().optional(),
 })
 
 type FormData = z.infer<typeof schema>
@@ -101,6 +103,7 @@ export function AttivitaForm({
   const [submitting, setSubmitting] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [loadingEvent, setLoadingEvent] = useState(false)
+  const [loadingPrezzo, setLoadingPrezzo] = useState(false)
 
   const today = new Date().toISOString().split('T')[0]
 
@@ -123,8 +126,11 @@ export function AttivitaForm({
 
   const watchCommittenteId = watch('committenteId')
   const watchClienteId = watch('clienteId')
+  const watchTipoAttivitaId = watch('tipoAttivitaId')
+  const watchDataAttivita = watch('dataAttivita')
   const watchOraInizio = watch('oraInizio')
   const watchOraFine = watch('oraFine')
+  const watchOreErogateTesto = watch('oreErogateTesto')
 
   // Ore calcolate da inizio/fine (solo se modoOrari=true)
   const oreCalcolate = (() => {
@@ -159,6 +165,44 @@ export function AttivitaForm({
     setValue('progettoId', '')
   }, [watchClienteId, watchCommittenteId, setValue])
 
+  // Fetch prezzo dal listino quando cambiano committente/cliente/tipo/data
+  useEffect(() => {
+    if (!watchCommittenteId) return
+    const params = new URLSearchParams({ committente_id: watchCommittenteId })
+    if (watchClienteId) params.set('cliente_id', watchClienteId)
+    if (watchTipoAttivitaId) params.set('tipo_attivita_id', watchTipoAttivitaId)
+    if (watchDataAttivita) params.set('data', watchDataAttivita)
+    setLoadingPrezzo(true)
+    fetch(`/api/listino/prezzo?${params}`)
+      .then((r) => r.json())
+      .then((data: { tariffa: number | null }) => {
+        if (data.tariffa !== null) {
+          setValue('prezzoUnitarioTesto', String(data.tariffa))
+        }
+      })
+      .catch(console.error)
+      .finally(() => setLoadingPrezzo(false))
+  }, [watchCommittenteId, watchClienteId, watchTipoAttivitaId, watchDataAttivita, setValue])
+
+  // Calcola valoreAttivita automaticamente
+  useEffect(() => {
+    const prezzo = parseFloat(watch('prezzoUnitarioTesto') ?? '')
+    let oreMin: number | null = null
+    if (modoOrari && watchOraInizio && watchOraFine) {
+      const [hi, mi] = watchOraInizio.split(':').map(Number)
+      const [hf, mf] = watchOraFine.split(':').map(Number)
+      const d = (hf * 60 + mf) - (hi * 60 + mi)
+      if (d > 0) oreMin = d
+    } else if (!modoOrari && watchOreErogateTesto) {
+      oreMin = parseOreInput(watchOreErogateTesto)
+    }
+    if (!isNaN(prezzo) && prezzo > 0 && oreMin !== null && oreMin > 0) {
+      const valore = prezzo * (oreMin / 60)
+      setValue('valoreAttivitaTesto', valore.toFixed(2))
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [watch('prezzoUnitarioTesto'), watchOraInizio, watchOraFine, watchOreErogateTesto, modoOrari])
+
   // Se eventId: carica dati e pre-popola form
   useEffect(() => {
     if (!eventId) return
@@ -170,11 +214,13 @@ export function AttivitaForm({
         const clientiData: Cliente[] = await clientiRes.json()
         setClienti(clientiData)
 
-        const progettiRes = await fetch(
-          `/api/progetti?committente_id=${ev.committenteId}&cliente_id=${ev.clienteId}`
-        )
-        const progettiData: Progetto[] = await progettiRes.json()
-        setProgetti(progettiData)
+        if (ev.clienteId) {
+          const progettiRes = await fetch(
+            `/api/progetti?committente_id=${ev.committenteId}&cliente_id=${ev.clienteId}`
+          )
+          const progettiData: Progetto[] = await progettiRes.json()
+          setProgetti(progettiData)
+        }
 
         setModoOrari(true) // sempre mode orari in modifica
         reset({
@@ -183,12 +229,14 @@ export function AttivitaForm({
           oraFine: ev.oraFine,
           oreErogateTesto: ev.oreErogate ? minsToInput(ev.oreErogate) : '',
           committenteId: String(ev.committenteId),
-          clienteId: String(ev.clienteId),
+          clienteId: ev.clienteId ? String(ev.clienteId) : '',
           progettoId: ev.progettoId ? String(ev.progettoId) : '',
           tipoAttivitaId: String(ev.tipoAttivitaId),
           descrizione: ev.descrizione ?? '',
           noteInterne: ev.noteInterne ?? '',
           fatturabile: ev.fatturabile,
+          prezzoUnitarioTesto: ev.prezzoUnitario != null ? String(ev.prezzoUnitario) : '',
+          valoreAttivitaTesto: ev.valoreAttivita != null ? String(ev.valoreAttivita) : '',
         })
       })
       .finally(() => setLoadingEvent(false))
@@ -222,15 +270,19 @@ export function AttivitaForm({
 
     setSubmitting(true)
     try {
+      const prezzoNum = parseFloat(data.prezzoUnitarioTesto ?? '')
+      const valoreNum = parseFloat(data.valoreAttivitaTesto ?? '')
       const base = {
         dataAttivita: data.dataAttivita,
         committenteId: parseInt(data.committenteId),
-        clienteId: parseInt(data.clienteId),
+        clienteId: data.clienteId ? parseInt(data.clienteId) : null,
         progettoId: data.progettoId ? parseInt(data.progettoId) : null,
         tipoAttivitaId: parseInt(data.tipoAttivitaId),
         descrizione: data.descrizione || null,
         noteInterne: data.noteInterne || null,
         fatturabile: data.fatturabile,
+        prezzoUnitario: !isNaN(prezzoNum) && prezzoNum > 0 ? prezzoNum : null,
+        valoreAttivita: !isNaN(valoreNum) && valoreNum > 0 ? valoreNum : null,
       }
 
       const payload = modoOrari
@@ -368,16 +420,17 @@ export function AttivitaForm({
 
       {/* Cliente */}
       <div className="space-y-1">
-        <Label>Cliente</Label>
+        <Label>Cliente <span className="text-muted-foreground text-xs">(opzionale)</span></Label>
         <Select
-          value={watchClienteId ?? ''}
-          onValueChange={(v) => setValue('clienteId', v, { shouldValidate: true })}
+          value={watchClienteId || '__none__'}
+          onValueChange={(v) => setValue('clienteId', v === '__none__' ? '' : v, { shouldValidate: true })}
           disabled={!watchCommittenteId || loadingClienti}
         >
           <SelectTrigger>
-            <SelectValue placeholder={loadingClienti ? 'Caricamento...' : 'Seleziona cliente...'} />
+            <SelectValue placeholder={loadingClienti ? 'Caricamento...' : 'Nessun cliente'} />
           </SelectTrigger>
           <SelectContent>
+            <SelectItem value="__none__">— Nessun cliente —</SelectItem>
             {clienti.map((c) => (
               <SelectItem key={c.id} value={String(c.id)}>
                 {c.ragioneSociale}
@@ -385,7 +438,6 @@ export function AttivitaForm({
             ))}
           </SelectContent>
         </Select>
-        {errors.clienteId && <p className="text-xs text-destructive">{errors.clienteId.message}</p>}
       </div>
 
       {/* Progetto */}
@@ -463,6 +515,35 @@ export function AttivitaForm({
           onCheckedChange={(v) => setValue('fatturabile', v)}
         />
         <Label htmlFor="fatturabile">Fatturabile</Label>
+      </div>
+
+      {/* Prezzo unitario + Valore attività */}
+      <div className="grid grid-cols-2 gap-3">
+        <div className="space-y-1">
+          <Label htmlFor="prezzoUnitarioTesto">
+            Prezzo €/h
+            {loadingPrezzo && <span className="ml-1 text-xs text-muted-foreground">(caricamento…)</span>}
+          </Label>
+          <Input
+            id="prezzoUnitarioTesto"
+            type="number"
+            step="0.01"
+            min="0"
+            placeholder="Auto da listino"
+            {...register('prezzoUnitarioTesto')}
+          />
+        </div>
+        <div className="space-y-1">
+          <Label htmlFor="valoreAttivitaTesto">Valore €</Label>
+          <Input
+            id="valoreAttivitaTesto"
+            type="number"
+            step="0.01"
+            min="0"
+            placeholder="Auto"
+            {...register('valoreAttivitaTesto')}
+          />
+        </div>
       </div>
 
       {/* Azioni */}

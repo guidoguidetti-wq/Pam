@@ -3,46 +3,38 @@ import { auth } from '@/lib/auth'
 import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
 import { coloreCommittente } from '@/lib/utils'
-
-// ── helpers ────────────────────────────────────────────────────────────────
+import { getTariffa } from '@/lib/tariffe'
 
 function minsToHHMM(mins: number): string {
-  const h = Math.floor(mins / 60)
-  const m = mins % 60
-  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
+  return `${String(Math.floor(mins / 60)).padStart(2, '0')}:${String(mins % 60).padStart(2, '0')}`
 }
-
 function epochTimeToMins(d: Date): number {
   const [h, m] = d.toISOString().substring(11, 16).split(':').map(Number)
   return h * 60 + m
 }
 
-// ── schema ─────────────────────────────────────────────────────────────────
-
 const schema = z
   .object({
-    dataAttivita: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Formato data non valido'),
+    dataAttivita: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
     oraInizio: z.string().regex(/^\d{2}:\d{2}$/).optional(),
     oraFine: z.string().regex(/^\d{2}:\d{2}$/).optional(),
-    oreErogate: z.number().int().positive().optional(), // minuti
+    oreErogate: z.number().int().positive().optional(),
     committenteId: z.number().int().positive(),
-    clienteId: z.number().int().positive(),
+    clienteId: z.number().int().positive().nullable().optional(),
     progettoId: z.number().int().positive().nullable().optional(),
     tipoAttivitaId: z.number().int().positive(),
     descrizione: z.string().nullable().optional(),
     noteInterne: z.string().nullable().optional(),
     fatturabile: z.boolean().default(true),
+    prezzoUnitario: z.number().nullable().optional(),
+    valoreAttivita: z.number().nullable().optional(),
   })
-  .refine(
-    (d) => (d.oraInizio && d.oraFine) || typeof d.oreErogate === 'number',
-    { message: 'Specificare ora inizio/fine oppure ore erogate' }
-  )
-  .refine(
-    (d) => !(d.oraInizio && d.oraFine) || d.oraFine > d.oraInizio,
-    { message: 'Ora fine deve essere successiva a ora inizio', path: ['oraFine'] }
-  )
-
-// ── serializer ─────────────────────────────────────────────────────────────
+  .refine((d) => (d.oraInizio && d.oraFine) || typeof d.oreErogate === 'number', {
+    message: 'Specificare ora inizio/fine oppure ore erogate',
+  })
+  .refine((d) => !(d.oraInizio && d.oraFine) || d.oraFine > d.oraInizio, {
+    message: 'Ora fine deve essere successiva a ora inizio', path: ['oraFine'],
+  })
 
 type AttivitaWithRel = {
   id: bigint
@@ -51,14 +43,16 @@ type AttivitaWithRel = {
   oraFine: Date
   oreErogate: number | null
   committenteId: number
-  clienteId: number
+  clienteId: number | null
   progettoId: number | null
   tipoAttivitaId: number
   descrizione: string | null
   noteInterne: string | null
   fatturabile: boolean
+  prezzoUnitario: { toString(): string } | null
+  valoreAttivita: { toString(): string } | null
   committente: { ragioneSociale: string }
-  cliente: { ragioneSociale: string }
+  cliente: { ragioneSociale: string } | null
   tipoAttivita: { codice: string; descrizione: string }
   progetto: { nome: string } | null
 }
@@ -80,6 +74,8 @@ function serialize(row: AttivitaWithRel) {
     descrizione: row.descrizione,
     noteInterne: row.noteInterne,
     fatturabile: row.fatturabile,
+    prezzoUnitario: row.prezzoUnitario ? parseFloat(row.prezzoUnitario.toString()) : null,
+    valoreAttivita: row.valoreAttivita ? parseFloat(row.valoreAttivita.toString()) : null,
     committente: row.committente,
     cliente: row.cliente,
     tipoAttivita: row.tipoAttivita,
@@ -100,8 +96,6 @@ const includeRelations = {
   progetto: { select: { nome: true } },
 }
 
-// ── GET ────────────────────────────────────────────────────────────────────
-
 export async function GET(req: NextRequest) {
   const session = await auth()
   if (!session) return NextResponse.json({ error: 'Non autorizzato' }, { status: 401 })
@@ -120,11 +114,8 @@ export async function GET(req: NextRequest) {
     include: includeRelations,
     orderBy: [{ dataAttivita: 'asc' }, { oraInizio: 'asc' }],
   })
-
   return NextResponse.json(attivita.map(serialize))
 }
-
-// ── POST ───────────────────────────────────────────────────────────────────
 
 export async function POST(req: NextRequest) {
   const session = await auth()
@@ -135,31 +126,42 @@ export async function POST(req: NextRequest) {
   if (!parsed.success)
     return NextResponse.json({ error: 'Dati non validi', details: parsed.error.issues }, { status: 422 })
 
-  const { dataAttivita, oraInizio, oraFine, oreErogate, ...rest } = parsed.data
+  const { dataAttivita, oraInizio, oraFine, oreErogate, prezzoUnitario, valoreAttivita, ...rest } = parsed.data
 
   try {
-    let finalOraInizio: string
-    let finalOraFine: string
-    let finalOreErogate: number
+    let finalOraInizio: string, finalOraFine: string, finalOreErogate: number
 
     if (oraInizio && oraFine) {
-      finalOraInizio = oraInizio
-      finalOraFine = oraFine
+      finalOraInizio = oraInizio; finalOraFine = oraFine
       const [hi, mi] = oraInizio.split(':').map(Number)
       const [hf, mf] = oraFine.split(':').map(Number)
       finalOreErogate = (hf * 60 + mf) - (hi * 60 + mi)
     } else {
-      // Modo ore erogate: calcola inizio = fine ultima attività della giornata
       finalOreErogate = oreErogate!
       const lastAct = await prisma.attivita.findFirst({
         where: { dataAttivita: new Date(dataAttivita) },
-        orderBy: { oraFine: 'desc' },
-        select: { oraFine: true },
+        orderBy: { oraFine: 'desc' }, select: { oraFine: true },
       })
       const startMins = lastAct ? epochTimeToMins(lastAct.oraFine) : 9 * 60
       finalOraInizio = minsToHHMM(startMins)
       finalOraFine = minsToHHMM(startMins + finalOreErogate)
     }
+
+    // Risolvi prezzo dal listino se non fornito
+    let finalPrezzo = prezzoUnitario ?? null
+    if (finalPrezzo === null || finalPrezzo === undefined) {
+      const tariffa = await getTariffa(
+        rest.committenteId,
+        rest.clienteId ?? null,
+        rest.tipoAttivitaId,
+        'ORARIO',
+        new Date(dataAttivita)
+      )
+      finalPrezzo = tariffa ? parseFloat(tariffa.toString()) : null
+    }
+
+    // Calcola valore se non fornito
+    const finalValore = valoreAttivita ?? (finalPrezzo !== null ? finalPrezzo * (finalOreErogate / 60) : null)
 
     const result = await prisma.attivita.create({
       data: {
@@ -168,6 +170,8 @@ export async function POST(req: NextRequest) {
         oraInizio: new Date(`1970-01-01T${finalOraInizio}:00.000Z`),
         oraFine: new Date(`1970-01-01T${finalOraFine}:00.000Z`),
         oreErogate: finalOreErogate,
+        prezzoUnitario: finalPrezzo,
+        valoreAttivita: finalValore,
       },
       include: includeRelations,
     })

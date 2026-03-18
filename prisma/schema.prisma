@@ -163,18 +163,20 @@ model Attivita {
   oraFine        DateTime @db.Time() @map("ora_fine")
   // durata_minuti è computed: calcolato in app da oraFine - oraInizio
   committenteId  Int      @map("committente_id")
-  clienteId      Int      @map("cliente_id")
+  clienteId      Int?     @map("cliente_id")
   progettoId     Int?     @map("progetto_id")
   tipoAttivitaId Int      @db.SmallInt @map("tipo_attivita_id")
   descrizione    String?  @db.Text
   noteInterne    String?  @db.Text @map("note_interne")
   fatturabile    Boolean  @default(true)
-  oreErogate     Int?     @db.SmallInt @map("ore_erogate")   // minuti, calcolato o inserito manualmente
+  oreErogate     Int?     @db.SmallInt @map("ore_erogate")
+  prezzoUnitario Decimal? @db.Decimal(10,4) @map("prezzo_unitario")
+  valoreAttivita Decimal? @db.Decimal(10,2) @map("valore_attivita")
   createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
   updatedAt      DateTime @updatedAt      @map("updated_at") @db.Timestamptz
 
   committente  Committente  @relation(fields: [committenteId], references: [id])
-  cliente      Cliente      @relation(fields: [clienteId], references: [id])
+  cliente      Cliente?     @relation(fields: [clienteId], references: [id])
   progetto     Progetto?    @relation(fields: [progettoId], references: [id])
   tipoAttivita TipoAttivita @relation(fields: [tipoAttivitaId], references: [id])
   spese        Spesa[]

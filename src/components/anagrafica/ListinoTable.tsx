@@ -236,6 +236,7 @@ export default function ListinoTable({
             <thead className="bg-muted/50">
               <tr>
                 <th className="text-left px-3 py-2.5 font-medium">Committente</th>
+                <th className="text-left px-3 py-2.5 font-medium">Cliente</th>
                 <th className="text-left px-3 py-2.5 font-medium">Scope</th>
                 <th className="text-left px-3 py-2.5 font-medium">Tipo voce</th>
                 <th className="text-right px-3 py-2.5 font-medium">Tariffa</th>
@@ -250,6 +251,7 @@ export default function ListinoTable({
                 return (
                   <tr key={row.id} className="hover:bg-muted/30">
                     <td className="px-3 py-2.5 font-medium text-xs">{row.committente.ragioneSociale}</td>
+                    <td className="px-3 py-2.5 text-xs text-muted-foreground">{row.cliente?.ragioneSociale ?? '—'}</td>
                     <td className="px-3 py-2.5">
                       <span className={cn('inline-flex items-center px-2 py-0.5 rounded text-xs font-medium', PRIORITY_COLORS[priority])}>
                         P{priority} · {label}
