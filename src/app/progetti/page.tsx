@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic'
+
 import { prisma } from '@/lib/prisma'
 import ProgettiTable from '@/components/progetti/ProgettiTable'
 import AppLayout from '@/components/layout/AppLayout'
