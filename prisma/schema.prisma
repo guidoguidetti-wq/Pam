@@ -1,0 +1,231 @@
+// PAM — Personal Activity Manager
+// Prisma Schema v1.0
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ─── LOOKUP ────────────────────────────────────────────────
+
+enum TipoVoceListino {
+  ORARIO
+  GIORNALIERO
+  KM
+  RIMBORSO
+}
+
+enum TipoBudget {
+  STIMATO
+  CONSUNTIVO
+}
+
+enum TipoSpesa {
+  KM
+  AUTOSTRADA
+  MEZZI
+  VITTO
+  ALLOGGIO
+  ALTRO
+}
+
+model TipoAttivita {
+  id          Int    @id @default(autoincrement()) @db.SmallInt
+  codice      String @unique @db.VarChar(10)
+  descrizione String @db.VarChar(100)
+  attivo      Boolean @default(true)
+
+  listino       Listino[]
+  progettoStime ProgettoStima[]
+  attivita      Attivita[]
+
+  @@map("tipo_attivita")
+}
+
+// ─── COMMITTENTI ───────────────────────────────────────────
+
+model Committente {
+  id              Int      @id @default(autoincrement())
+  ragioneSociale  String   @db.VarChar(200) @map("ragione_sociale")
+  partitaIva      String?  @db.VarChar(20)  @map("partita_iva")
+  codiceFiscale   String?  @db.VarChar(16)  @map("codice_fiscale")
+  indirizzo       String?  @db.Text
+  email           String?  @db.VarChar(150)
+  telefono        String?  @db.VarChar(30)
+  note            String?  @db.Text
+  attivo          Boolean  @default(true)
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  clienti   Cliente[]
+  listino   Listino[]
+  progetti  Progetto[]
+  attivita  Attivita[]
+
+  @@map("committente")
+}
+
+// ─── CLIENTI ───────────────────────────────────────────────
+
+model Cliente {
+  id             Int      @id @default(autoincrement())
+  committenteId  Int      @map("committente_id")
+  ragioneSociale String   @db.VarChar(200) @map("ragione_sociale")
+  partitaIva     String?  @db.VarChar(20)  @map("partita_iva")
+  indirizzo      String?  @db.Text
+  email          String?  @db.VarChar(150)
+  note           String?  @db.Text
+  attivo         Boolean  @default(true)
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  committente Committente @relation(fields: [committenteId], references: [id])
+  listino     Listino[]
+  progetti    Progetto[]
+  attivita    Attivita[]
+
+  @@index([committenteId])
+  @@map("cliente")
+}
+
+// ─── LISTINO ───────────────────────────────────────────────
+
+model Listino {
+  id              Int             @id @default(autoincrement())
+  committenteId   Int             @map("committente_id")
+  clienteId       Int?            @map("cliente_id")       // NULL = default committente
+  tipoAttivitaId  Int?            @db.SmallInt @map("tipo_attivita_id")  // NULL = tutti i tipi
+  tipoVoce        TipoVoceListino @map("tipo_voce")
+  tariffa         Decimal         @db.Decimal(10, 4)
+  valuta          String          @default("EUR") @db.Char(3)
+  oreGiornata     Decimal         @default(8.00)  @db.Decimal(4, 2) @map("ore_giornata")
+  dataInizio      DateTime        @db.Date @map("data_inizio")
+  dataFine        DateTime?       @db.Date @map("data_fine")
+  note            String?         @db.Text
+
+  committente  Committente  @relation(fields: [committenteId], references: [id])
+  cliente      Cliente?     @relation(fields: [clienteId], references: [id])
+  tipoAttivita TipoAttivita? @relation(fields: [tipoAttivitaId], references: [id])
+
+  @@index([committenteId, clienteId, tipoAttivitaId])
+  @@map("listino")
+}
+
+// ─── PROGETTI ──────────────────────────────────────────────
+
+model Progetto {
+  id                Int        @id @default(autoincrement())
+  committenteId     Int        @map("committente_id")
+  clienteId         Int        @map("cliente_id")
+  codice            String?    @db.VarChar(50)
+  nome              String     @db.VarChar(200)
+  descrizione       String?    @db.Text
+  tipoBudget        TipoBudget @default(CONSUNTIVO) @map("tipo_budget")
+  dataInizio        DateTime?  @db.Date @map("data_inizio")
+  dataFinePrevista  DateTime?  @db.Date @map("data_fine_prevista")
+  attivo            Boolean    @default(true)
+  note              String?    @db.Text
+  createdAt         DateTime   @default(now()) @map("created_at") @db.Timestamptz
+
+  committente Committente     @relation(fields: [committenteId], references: [id])
+  cliente     Cliente         @relation(fields: [clienteId], references: [id])
+  stime       ProgettoStima[]
+  attivita    Attivita[]
+
+  @@index([committenteId])
+  @@index([clienteId])
+  @@map("progetto")
+}
+
+model ProgettoStima {
+  id             Int     @id @default(autoincrement())
+  progettoId     Int     @map("progetto_id")
+  tipoAttivitaId Int     @db.SmallInt @map("tipo_attivita_id")
+  giorniStimati  Decimal @db.Decimal(8, 2) @map("giorni_stimati")
+  orePerGiorno   Decimal @default(8.00) @db.Decimal(4, 2) @map("ore_per_giorno")
+
+  progetto     Progetto     @relation(fields: [progettoId], references: [id], onDelete: Cascade)
+  tipoAttivita TipoAttivita @relation(fields: [tipoAttivitaId], references: [id])
+
+  @@unique([progettoId, tipoAttivitaId])
+  @@map("progetto_stima")
+}
+
+// ─── ATTIVITÀ (LOG PRINCIPALE) ─────────────────────────────
+
+model Attivita {
+  id             BigInt   @id @default(autoincrement())
+  dataAttivita   DateTime @db.Date @map("data_attivita")
+  oraInizio      DateTime @db.Time() @map("ora_inizio")
+  oraFine        DateTime @db.Time() @map("ora_fine")
+  // durata_minuti è computed: calcolato in app da oraFine - oraInizio
+  committenteId  Int      @map("committente_id")
+  clienteId      Int      @map("cliente_id")
+  progettoId     Int?     @map("progetto_id")
+  tipoAttivitaId Int      @db.SmallInt @map("tipo_attivita_id")
+  descrizione    String?  @db.Text
+  noteInterne    String?  @db.Text @map("note_interne")
+  fatturabile    Boolean  @default(true)
+  oreErogate     Int?     @db.SmallInt @map("ore_erogate")   // minuti, calcolato o inserito manualmente
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime @updatedAt      @map("updated_at") @db.Timestamptz
+
+  committente  Committente  @relation(fields: [committenteId], references: [id])
+  cliente      Cliente      @relation(fields: [clienteId], references: [id])
+  progetto     Progetto?    @relation(fields: [progettoId], references: [id])
+  tipoAttivita TipoAttivita @relation(fields: [tipoAttivitaId], references: [id])
+  spese        Spesa[]
+  allegati     Allegato[]
+
+  @@index([dataAttivita])
+  @@index([committenteId, dataAttivita])
+  @@index([clienteId])
+  @@index([progettoId])
+  @@map("attivita")
+}
+
+// ─── SPESE ─────────────────────────────────────────────────
+
+model Spesa {
+  id                BigInt    @id @default(autoincrement())
+  attivitaId        BigInt    @map("attivita_id")
+  tipoSpesa         TipoSpesa @map("tipo_spesa")
+  descrizione       String?   @db.VarChar(300)
+  quantita          Decimal?  @db.Decimal(10, 3)         // per KM: numero km
+  importoUnitario   Decimal?  @db.Decimal(10, 4) @map("importo_unitario")  // €/km
+  importoTotale     Decimal   @db.Decimal(10, 2) @map("importo_totale")
+  valuta            String    @default("EUR") @db.Char(3)
+  dataSpesa         DateTime  @db.Date @map("data_spesa")
+  rimborsoRichiesto Boolean   @default(true) @map("rimborso_richiesto")
+  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  attivita Attivita   @relation(fields: [attivitaId], references: [id], onDelete: Cascade)
+  allegati Allegato[]
+
+  @@index([attivitaId])
+  @@map("spesa")
+}
+
+// ─── ALLEGATI ──────────────────────────────────────────────
+
+model Allegato {
+  id              BigInt   @id @default(autoincrement())
+  spesaId         BigInt?  @map("spesa_id")
+  attivitaId      BigInt?  @map("attivita_id")
+  nomeFile        String   @db.VarChar(255) @map("nome_file")
+  tipoMime        String?  @db.VarChar(100) @map("tipo_mime")
+  dimensioneBytes Int?     @map("dimensione_bytes")
+  storageKey      String   @db.VarChar(500) @map("storage_key")
+  storageUrl      String?  @db.VarChar(1000) @map("storage_url")
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  spesa    Spesa?    @relation(fields: [spesaId], references: [id], onDelete: Cascade)
+  attivita Attivita? @relation(fields: [attivitaId], references: [id], onDelete: Cascade)
+
+  @@index([spesaId])
+  @@index([attivitaId])
+  @@map("allegato")
+}
