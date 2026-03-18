@@ -13,7 +13,7 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
 import { Switch } from '@/components/ui/switch'
-import { cn } from '@/lib/utils'
+import { cn, formatOre } from '@/lib/utils'
 
 type Committente = { id: number; ragioneSociale: string }
 type Cliente = { id: number; ragioneSociale: string }
@@ -43,6 +43,8 @@ type Progetto = {
   cliente: { id: number; ragioneSociale: string }
   stime: Stima[]
   _count: { attivita: number }
+  oreErogateTotale: number
+  oreStimaTotale: number
 }
 
 const formSchema = z.object({
@@ -273,6 +275,8 @@ export default function ProgettiTable({
                 <th className="text-left px-3 py-2.5 font-medium hidden md:table-cell">Committente › Cliente</th>
                 <th className="text-left px-3 py-2.5 font-medium hidden sm:table-cell">Tipo</th>
                 <th className="text-left px-3 py-2.5 font-medium hidden lg:table-cell">Date</th>
+                <th className="text-right px-3 py-2.5 font-medium hidden md:table-cell">Stimate</th>
+                <th className="text-right px-3 py-2.5 font-medium hidden md:table-cell">Erogate</th>
                 <th className="text-center px-3 py-2.5 font-medium hidden sm:table-cell">Att.</th>
                 <th className="px-3 py-2.5"></th>
               </tr>
@@ -311,6 +315,21 @@ export default function ProgettiTable({
                     </td>
                     <td className="px-3 py-2.5 hidden lg:table-cell text-xs text-muted-foreground">
                       {formatDate(p.dataInizio)} {p.dataFinePrevista && `→ ${formatDate(p.dataFinePrevista)}`}
+                    </td>
+                    <td className="px-3 py-2.5 hidden md:table-cell text-right text-xs text-muted-foreground">
+                      {p.tipoBudget === 'STIMATO' && p.oreStimaTotale > 0 ? formatOre(p.oreStimaTotale) : '—'}
+                    </td>
+                    <td className={cn(
+                      'px-3 py-2.5 hidden md:table-cell text-right text-xs font-medium',
+                      p.tipoBudget === 'STIMATO' && p.oreStimaTotale > 0
+                        ? p.oreErogateTotale >= p.oreStimaTotale
+                          ? 'text-red-600 bg-red-50'
+                          : p.oreErogateTotale >= p.oreStimaTotale * 0.8
+                            ? 'text-yellow-700 bg-yellow-50'
+                            : 'text-foreground'
+                        : 'text-foreground'
+                    )}>
+                      {p.oreErogateTotale > 0 ? formatOre(p.oreErogateTotale) : '—'}
                     </td>
                     <td className="px-3 py-2.5 hidden sm:table-cell text-center text-xs text-muted-foreground">
                       {p._count.attivita}
@@ -366,7 +385,7 @@ export default function ProgettiTable({
             <DialogTitle>{editing ? 'Modifica progetto' : 'Nuovo progetto'}</DialogTitle>
           </DialogHeader>
 
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 py-2">
+          <form onSubmit={handleSubmit(onSubmit)} className="space-y-2 py-1">
             {/* Committente */}
             <div className="space-y-1">
               <Label>Committente *</Label>

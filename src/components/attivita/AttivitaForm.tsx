@@ -16,7 +16,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Loader2, Trash2, Clock } from 'lucide-react'
+import { Loader2, Trash2, Clock, RefreshCw } from 'lucide-react'
 import { formatOre } from '@/lib/utils'
 
 // ── utilità ore ────────────────────────────────────────────────────────────
@@ -131,6 +131,7 @@ export function AttivitaForm({
   const watchOraInizio = watch('oraInizio')
   const watchOraFine = watch('oraFine')
   const watchOreErogateTesto = watch('oreErogateTesto')
+  const watchPrezzoUnitarioTesto = watch('prezzoUnitarioTesto')
 
   // Ore calcolate da inizio/fine (solo se modoOrari=true)
   const oreCalcolate = (() => {
@@ -141,7 +142,7 @@ export function AttivitaForm({
     return mins > 0 ? mins : null
   })()
 
-  // Carica clienti al cambio committente
+  // Carica clienti al cambio committente (solo carica lista, non resetta i valori)
   useEffect(() => {
     if (!watchCommittenteId) { setClienti([]); setProgetti([]); return }
     setLoadingClienti(true)
@@ -149,12 +150,9 @@ export function AttivitaForm({
       .then((r) => r.json())
       .then((data: Cliente[]) => setClienti(data))
       .finally(() => setLoadingClienti(false))
-    setValue('clienteId', '')
-    setValue('progettoId', '')
-    setProgetti([])
-  }, [watchCommittenteId, setValue])
+  }, [watchCommittenteId])
 
-  // Carica progetti al cambio cliente
+  // Carica progetti al cambio cliente (solo carica lista, non resetta i valori)
   useEffect(() => {
     if (!watchClienteId || !watchCommittenteId) { setProgetti([]); return }
     setLoadingProgetti(true)
@@ -162,31 +160,37 @@ export function AttivitaForm({
       .then((r) => r.json())
       .then((data: Progetto[]) => setProgetti(data))
       .finally(() => setLoadingProgetti(false))
-    setValue('progettoId', '')
-  }, [watchClienteId, watchCommittenteId, setValue])
+  }, [watchClienteId, watchCommittenteId])
 
-  // Fetch prezzo dal listino quando cambiano committente/cliente/tipo/data
-  useEffect(() => {
+  // Funzione riutilizzabile per fetch prezzo dal listino
+  async function fetchPrezzo() {
     if (!watchCommittenteId) return
     const params = new URLSearchParams({ committente_id: watchCommittenteId })
     if (watchClienteId) params.set('cliente_id', watchClienteId)
     if (watchTipoAttivitaId) params.set('tipo_attivita_id', watchTipoAttivitaId)
     if (watchDataAttivita) params.set('data', watchDataAttivita)
     setLoadingPrezzo(true)
-    fetch(`/api/listino/prezzo?${params}`)
-      .then((r) => r.json())
-      .then((data: { tariffa: number | null }) => {
-        if (data.tariffa !== null) {
-          setValue('prezzoUnitarioTesto', String(data.tariffa))
-        }
-      })
-      .catch(console.error)
-      .finally(() => setLoadingPrezzo(false))
-  }, [watchCommittenteId, watchClienteId, watchTipoAttivitaId, watchDataAttivita, setValue])
+    try {
+      const res = await fetch(`/api/listino/prezzo?${params}`)
+      const data: { tariffa: number | null } = await res.json()
+      setValue('prezzoUnitarioTesto', data.tariffa != null ? String(data.tariffa) : '')
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setLoadingPrezzo(false)
+    }
+  }
 
-  // Calcola valoreAttivita automaticamente
+  // Fetch prezzo dal listino quando cambiano committente/cliente/tipo/data
   useEffect(() => {
-    const prezzo = parseFloat(watch('prezzoUnitarioTesto') ?? '')
+    fetchPrezzo()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [watchCommittenteId, watchClienteId, watchTipoAttivitaId, watchDataAttivita])
+
+  // Calcola valoreAttivita automaticamente al cambio di prezzo o ore
+  useEffect(() => {
+    const prezzo = parseFloat(watchPrezzoUnitarioTesto ?? '')
+    if (isNaN(prezzo) || prezzo <= 0) return
     let oreMin: number | null = null
     if (modoOrari && watchOraInizio && watchOraFine) {
       const [hi, mi] = watchOraInizio.split(':').map(Number)
@@ -196,12 +200,10 @@ export function AttivitaForm({
     } else if (!modoOrari && watchOreErogateTesto) {
       oreMin = parseOreInput(watchOreErogateTesto)
     }
-    if (!isNaN(prezzo) && prezzo > 0 && oreMin !== null && oreMin > 0) {
-      const valore = prezzo * (oreMin / 60)
-      setValue('valoreAttivitaTesto', valore.toFixed(2))
+    if (oreMin !== null && oreMin > 0) {
+      setValue('valoreAttivitaTesto', (prezzo * (oreMin / 60)).toFixed(2))
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [watch('prezzoUnitarioTesto'), watchOraInizio, watchOraFine, watchOreErogateTesto, modoOrari])
+  }, [watchPrezzoUnitarioTesto, watchOraInizio, watchOraFine, watchOreErogateTesto, modoOrari, setValue])
 
   // Se eventId: carica dati e pre-popola form
   useEffect(() => {
@@ -339,7 +341,7 @@ export function AttivitaForm({
   const fatturabile = watch('fatturabile')
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 px-1">
+    <form onSubmit={handleSubmit(onSubmit)} className="space-y-2 px-1">
 
       {/* Data */}
       <div className="space-y-1">
@@ -402,7 +404,12 @@ export function AttivitaForm({
         <Label>Committente</Label>
         <Select
           value={watchCommittenteId ?? ''}
-          onValueChange={(v) => setValue('committenteId', v, { shouldValidate: true })}
+          onValueChange={(v) => {
+            setValue('committenteId', v, { shouldValidate: true })
+            setValue('clienteId', '')
+            setValue('progettoId', '')
+            setProgetti([])
+          }}
         >
           <SelectTrigger>
             <SelectValue placeholder="Seleziona committente..." />
@@ -423,7 +430,10 @@ export function AttivitaForm({
         <Label>Cliente <span className="text-muted-foreground text-xs">(opzionale)</span></Label>
         <Select
           value={watchClienteId || '__none__'}
-          onValueChange={(v) => setValue('clienteId', v === '__none__' ? '' : v, { shouldValidate: true })}
+          onValueChange={(v) => {
+            setValue('clienteId', v === '__none__' ? '' : v, { shouldValidate: true })
+            setValue('progettoId', '')
+          }}
           disabled={!watchCommittenteId || loadingClienti}
         >
           <SelectTrigger>
@@ -518,20 +528,29 @@ export function AttivitaForm({
       </div>
 
       {/* Prezzo unitario + Valore attività */}
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-2 gap-2">
         <div className="space-y-1">
-          <Label htmlFor="prezzoUnitarioTesto">
-            Prezzo €/h
-            {loadingPrezzo && <span className="ml-1 text-xs text-muted-foreground">(caricamento…)</span>}
-          </Label>
-          <Input
-            id="prezzoUnitarioTesto"
-            type="number"
-            step="0.01"
-            min="0"
-            placeholder="Auto da listino"
-            {...register('prezzoUnitarioTesto')}
-          />
+          <Label htmlFor="prezzoUnitarioTesto">Prezzo €/h</Label>
+          <div className="flex gap-1">
+            <Input
+              id="prezzoUnitarioTesto"
+              type="number"
+              step="0.01"
+              min="0"
+              placeholder="Da listino"
+              className="flex-1"
+              {...register('prezzoUnitarioTesto')}
+            />
+            <button
+              type="button"
+              onClick={fetchPrezzo}
+              disabled={loadingPrezzo || !watchCommittenteId}
+              title="Ricalcola da listino"
+              className="px-2 rounded border bg-muted hover:bg-accent disabled:opacity-40"
+            >
+              <RefreshCw className={`h-3.5 w-3.5 ${loadingPrezzo ? 'animate-spin' : ''}`} />
+            </button>
+          </div>
         </div>
         <div className="space-y-1">
           <Label htmlFor="valoreAttivitaTesto">Valore €</Label>

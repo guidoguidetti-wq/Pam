@@ -288,7 +288,7 @@ export default function ListinoTable({
             <DialogTitle>{editing ? 'Modifica tariffa' : 'Nuova tariffa'}</DialogTitle>
           </DialogHeader>
 
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 py-2">
+          <form onSubmit={handleSubmit(onSubmit)} className="space-y-2 py-1">
             {/* Committente */}
             <div className="space-y-1">
               <Label>Committente *</Label>

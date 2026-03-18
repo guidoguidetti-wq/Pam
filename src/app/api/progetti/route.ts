@@ -47,7 +47,30 @@ export async function GET(req: NextRequest) {
       _count: { select: { attivita: true } },
     },
   })
-  return NextResponse.json(progetti)
+
+  // Aggrega ore erogate per progetto
+  const ids = progetti.map(p => p.id)
+  const oreGroups = ids.length > 0
+    ? await prisma.attivita.groupBy({
+        by: ['progettoId'],
+        _sum: { oreErogate: true },
+        where: { progettoId: { in: ids } },
+      })
+    : []
+  const oreMap: Record<number, number> = {}
+  for (const g of oreGroups) {
+    if (g.progettoId !== null) oreMap[g.progettoId] = g._sum.oreErogate ?? 0
+  }
+
+  const result = progetti.map(p => ({
+    ...p,
+    oreErogateTotale: oreMap[p.id] ?? 0,
+    oreStimaTotale: p.stime.reduce(
+      (acc, s) => acc + s.giorniStimati.toNumber() * s.orePerGiorno.toNumber() * 60,
+      0
+    ),
+  }))
+  return NextResponse.json(result)
 }
 
 export async function POST(req: NextRequest) {
