@@ -21,6 +21,12 @@ export async function getTariffa(
     OR: [{ dataFine: null }, { dataFine: { gte: data } }],
   }
   const dove = { ...base, tipoVoce }
+  console.log('[getTariffa] start', { committenteId, clienteId, tipoAttivitaId, tipoVoce, data })
+  const allRecords = await prisma.listino.findMany({
+    where: { committenteId },
+    select: { id: true, clienteId: true, tipoAttivitaId: true, tipoVoce: true, tariffa: true, dataInizio: true, dataFine: true },
+  })
+  console.log('[getTariffa] all listino records for committente', committenteId, JSON.stringify(allRecords, null, 2))
 
   if (clienteId !== null) {
     // 1. Cliente + tipo specifico (con tipoVoce esatto, poi senza)

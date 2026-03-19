@@ -25,6 +25,8 @@ export async function GET(req: NextRequest) {
 
   const tipoVoceParsed = tipoVoce === 'GIORNALIERO' ? 'GIORNALIERO' : 'ORARIO'
   const tipoAttivitaId = tipoAttivitaIdParam ? parseInt(tipoAttivitaIdParam) : null
+  console.log('[prezzo] params:', { committenteId, clienteId, tipoAttivitaId, tipoVoceParsed, data })
   const tariffa = await getTariffa(committenteId, clienteId, tipoAttivitaId, tipoVoceParsed, data)
+  console.log('[prezzo] result:', tariffa)
   return NextResponse.json({ tariffa: tariffa ? parseFloat(tariffa.toString()) : null })
 }
