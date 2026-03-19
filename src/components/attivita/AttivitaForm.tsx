@@ -189,7 +189,8 @@ export function AttivitaForm({
     fetch(`/api/listino/prezzo?${params}`, { signal: controller.signal })
       .then((r) => r.json())
       .then((data: { tariffa: number | null }) => {
-        setValue('prezzoUnitarioTesto', data.tariffa != null ? String(data.tariffa) : '')
+        // Solo aggiorna se trovato; se null preserva il prezzo esistente
+        if (data.tariffa != null) setValue('prezzoUnitarioTesto', String(data.tariffa))
       })
       .catch((e: unknown) => {
         if (e instanceof Error && e.name === 'AbortError') return
@@ -214,7 +215,8 @@ export function AttivitaForm({
     try {
       const res = await fetch(`/api/listino/prezzo?${params}`)
       const data: { tariffa: number | null } = await res.json()
-      setValue('prezzoUnitarioTesto', data.tariffa != null ? String(data.tariffa) : '')
+      if (data.tariffa != null) setValue('prezzoUnitarioTesto', String(data.tariffa))
+      else toast.warning('Nessuna tariffa trovata nel listino')
     } catch (e) {
       console.error(e)
     } finally {

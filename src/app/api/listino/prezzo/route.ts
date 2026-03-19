@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
-import { getTariffaDebug, getTariffaKm } from '@/lib/tariffe'
+import { getTariffa, getTariffaKm } from '@/lib/tariffe'
 
 export async function GET(req: NextRequest) {
   const session = await auth()
@@ -25,6 +25,6 @@ export async function GET(req: NextRequest) {
 
   const tipoVoceParsed = tipoVoce === 'GIORNALIERO' ? 'GIORNALIERO' : 'ORARIO'
   const tipoAttivitaId = tipoAttivitaIdParam ? parseInt(tipoAttivitaIdParam) : null
-  const { tariffa, debug } = await getTariffaDebug(committenteId, clienteId, tipoAttivitaId, tipoVoceParsed, data)
-  return NextResponse.json({ tariffa: tariffa ? parseFloat(tariffa.toString()) : null, debug })
+  const tariffa = await getTariffa(committenteId, clienteId, tipoAttivitaId, tipoVoceParsed, data)
+  return NextResponse.json({ tariffa: tariffa ? parseFloat(tariffa.toString()) : null })
 }
