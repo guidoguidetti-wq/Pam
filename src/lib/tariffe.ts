@@ -15,53 +15,66 @@ export async function getTariffa(
   tipoVoce: TipoVoce,
   data: Date = new Date()
 ): Promise<Decimal | null> {
+  return (await getTariffaDebug(committenteId, clienteId, tipoAttivitaId, tipoVoce, data)).tariffa
+}
+
+export async function getTariffaDebug(
+  committenteId: number,
+  clienteId: number | null,
+  tipoAttivitaId: number | null,
+  tipoVoce: TipoVoce,
+  data: Date = new Date()
+): Promise<{ tariffa: Decimal | null; debug: object }> {
   const base = {
     committenteId,
     dataInizio: { lte: data },
     OR: [{ dataFine: null }, { dataFine: { gte: data } }],
   }
   const dove = { ...base, tipoVoce }
-  console.log('[getTariffa] start', { committenteId, clienteId, tipoAttivitaId, tipoVoce, data })
+
   const allRecords = await prisma.listino.findMany({
     where: { committenteId },
     select: { id: true, clienteId: true, tipoAttivitaId: true, tipoVoce: true, tariffa: true, dataInizio: true, dataFine: true },
   })
-  console.log('[getTariffa] all listino records for committente', committenteId, JSON.stringify(allRecords, null, 2))
+
+  const debug = {
+    params: { committenteId, clienteId, tipoAttivitaId, tipoVoce, data: data.toISOString() },
+    allRecords: allRecords.map(r => ({
+      ...r,
+      tariffa: r.tariffa.toString(),
+      dataInizio: r.dataInizio.toISOString(),
+      dataFine: r.dataFine?.toISOString() ?? null,
+    })),
+  }
 
   if (clienteId !== null) {
-    // 1. Cliente + tipo specifico (con tipoVoce esatto, poi senza)
     if (tipoAttivitaId) {
       const r = await prisma.listino.findFirst({ where: { ...dove, clienteId, tipoAttivitaId } })
-      if (r) return r.tariffa
+      if (r) return { tariffa: r.tariffa, debug: { ...debug, foundAt: 'step1 cliente+tipo+tipoVoce' } }
       const r1b = await prisma.listino.findFirst({ where: { ...base, clienteId, tipoAttivitaId } })
-      if (r1b) return r1b.tariffa
+      if (r1b) return { tariffa: r1b.tariffa, debug: { ...debug, foundAt: 'step1b cliente+tipo' } }
     }
 
-    // 2. Cliente, qualsiasi tipoAttivita (con tipoVoce esatto, poi senza)
     const r2 = await prisma.listino.findFirst({ where: { ...dove, clienteId, tipoAttivitaId: null } })
-    if (r2) return r2.tariffa
+    if (r2) return { tariffa: r2.tariffa, debug: { ...debug, foundAt: 'step2 cliente+tipoVoce' } }
     const r2b = await prisma.listino.findFirst({ where: { ...base, clienteId, tipoAttivitaId: null } })
-    if (r2b) return r2b.tariffa
-
-    // 2c. Cliente, qualsiasi tipoAttivita e qualsiasi tipoVoce (flat rate cliente)
+    if (r2b) return { tariffa: r2b.tariffa, debug: { ...debug, foundAt: 'step2b cliente' } }
     const r2c = await prisma.listino.findFirst({ where: { ...base, clienteId } })
-    if (r2c) return r2c.tariffa
+    if (r2c) return { tariffa: r2c.tariffa, debug: { ...debug, foundAt: 'step2c cliente any' } }
   }
 
-  // 3. Committente + tipo specifico, nessun cliente (con tipoVoce esatto, poi senza)
   if (tipoAttivitaId) {
     const r3 = await prisma.listino.findFirst({ where: { ...dove, clienteId: null, tipoAttivitaId } })
-    if (r3) return r3.tariffa
+    if (r3) return { tariffa: r3.tariffa, debug: { ...debug, foundAt: 'step3 committente+tipo+tipoVoce' } }
     const r3b = await prisma.listino.findFirst({ where: { ...base, clienteId: null, tipoAttivitaId } })
-    if (r3b) return r3b.tariffa
+    if (r3b) return { tariffa: r3b.tariffa, debug: { ...debug, foundAt: 'step3b committente+tipo' } }
   }
 
-  // 4. Default committente (con tipoVoce esatto, poi senza)
   const r4 = await prisma.listino.findFirst({ where: { ...dove, clienteId: null, tipoAttivitaId: null } })
-  if (r4) return r4.tariffa
+  if (r4) return { tariffa: r4.tariffa, debug: { ...debug, foundAt: 'step4 committente+tipoVoce' } }
 
   const r5 = await prisma.listino.findFirst({ where: { ...base, clienteId: null, tipoAttivitaId: null } })
-  return r5?.tariffa ?? null
+  return { tariffa: r5?.tariffa ?? null, debug: { ...debug, foundAt: r5 ? 'step5 committente default' : 'NOT FOUND' } }
 }
 
 /**
