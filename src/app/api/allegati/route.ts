@@ -7,6 +7,13 @@ export async function POST(req: NextRequest) {
   const session = await auth()
   if (!session) return NextResponse.json({ error: 'Non autorizzato' }, { status: 401 })
 
+  if (!process.env.BLOB_READ_WRITE_TOKEN) {
+    return NextResponse.json(
+      { error: 'Configurazione mancante: aggiungere BLOB_READ_WRITE_TOKEN nelle variabili ambiente Vercel' },
+      { status: 500 }
+    )
+  }
+
   const formData = await req.formData()
   const file = formData.get('file') as File | null
   const spesaId = formData.get('spesa_id') as string | null
@@ -17,7 +24,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'spesa_id o attivita_id richiesto' }, { status: 400 })
 
   try {
-    const blob = await put(file.name, file, { access: 'public' })
+    // Use a unique filename to avoid collisions
+    const ext = file.name.includes('.') ? file.name.split('.').pop() : ''
+    const uniqueName = `allegati/${Date.now()}-${Math.random().toString(36).slice(2)}${ext ? `.${ext}` : ''}`
+
+    const blob = await put(uniqueName, file, {
+      access: 'public',
+      contentType: file.type || undefined,
+    })
 
     const allegato = await prisma.allegato.create({
       data: {
@@ -41,7 +55,8 @@ export async function POST(req: NextRequest) {
       { status: 201 }
     )
   } catch (err) {
-    console.error(err)
-    return NextResponse.json({ error: 'Errore interno' }, { status: 500 })
+    console.error('Allegato upload error:', err)
+    const message = err instanceof Error ? err.message : 'Errore interno'
+    return NextResponse.json({ error: message }, { status: 500 })
   }
 }

@@ -114,6 +114,7 @@ export default function ClientiTable({
       )
       const { latitude: lat1, longitude: lon1 } = pos.coords
 
+      // Geocode the client address
       const nomRes = await fetch(
         `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(indirizzo)}&format=json&limit=1`,
         { headers: { 'User-Agent': 'PAM-PersonalActivityManager/1.0' } }
@@ -124,18 +125,36 @@ export default function ClientiTable({
       const lat2 = parseFloat(nomData[0].lat)
       const lon2 = parseFloat(nomData[0].lon)
 
-      // Haversine
-      const R = 6371
-      const dLat = ((lat2 - lat1) * Math.PI) / 180
-      const dLon = ((lon2 - lon1) * Math.PI) / 180
-      const a =
-        Math.sin(dLat / 2) ** 2 +
-        Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLon / 2) ** 2
-      const kmOneway = R * 2 * Math.asin(Math.sqrt(a))
-      const kmAR = Math.round(kmOneway * 2)
+      // Try OSRM for actual driving distance (note: OSRM uses lon,lat order)
+      let kmOneway: number
+      let method = 'stradale'
+      try {
+        const osrmRes = await fetch(
+          `https://router.project-osrm.org/route/v1/driving/${lon1},${lat1};${lon2},${lat2}?overview=false`,
+          { signal: AbortSignal.timeout(8000) }
+        )
+        if (!osrmRes.ok) throw new Error('OSRM non disponibile')
+        const osrmData = await osrmRes.json()
+        if (osrmData.code !== 'Ok' || !osrmData.routes?.length)
+          throw new Error('Nessun percorso trovato')
+        kmOneway = osrmData.routes[0].distance / 1000
+      } catch {
+        // Fallback: haversine in linea d'aria
+        const R = 6371
+        const dLat = ((lat2 - lat1) * Math.PI) / 180
+        const dLon = ((lon2 - lon1) * Math.PI) / 180
+        const a =
+          Math.sin(dLat / 2) ** 2 +
+          Math.cos((lat1 * Math.PI) / 180) *
+            Math.cos((lat2 * Math.PI) / 180) *
+            Math.sin(dLon / 2) ** 2
+        kmOneway = R * 2 * Math.asin(Math.sqrt(a))
+        method = 'aria (fallback)'
+      }
 
+      const kmAR = Math.round(kmOneway * 2)
       form.setValue('kmTrasferta', kmAR)
-      toast.success(`Distanza A/R rilevata: ${kmAR} km (${Math.round(kmOneway)} km × 2)`)
+      toast.success(`Distanza A/R ${method}: ${kmAR} km (${Math.round(kmOneway)} km × 2)`)
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Errore geolocalizzazione'
       toast.error(msg)
