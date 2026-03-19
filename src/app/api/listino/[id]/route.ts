@@ -7,8 +7,9 @@ const schema = z.object({
   committenteId: z.coerce.number().int().positive(),
   clienteId: z.coerce.number().int().positive().nullable().optional(),
   tipoAttivitaId: z.coerce.number().int().positive().nullable().optional(),
-  tipoVoce: z.enum(['ORARIO', 'GIORNALIERO', 'KM', 'RIMBORSO']),
+  tipoVoce: z.enum(['ORARIO', 'GIORNALIERO']),
   tariffa: z.coerce.number().positive(),
+  tariffaKm: z.coerce.number().positive().nullable().optional(),
   valuta: z.string().length(3).default('EUR'),
   oreGiornata: z.coerce.number().positive().default(8),
   dataInizio: z.string().min(1),
@@ -33,6 +34,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       where: { id: parseInt(id) },
       data: {
         ...rest,
+        tariffaKm: rest.tariffaKm ?? null,
         dataInizio: new Date(dataInizio),
         dataFine: dataFine ? new Date(dataFine) : null,
       },

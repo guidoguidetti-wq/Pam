@@ -23,8 +23,9 @@ type RigaListino = {
   committenteId: number
   clienteId: number | null
   tipoAttivitaId: number | null
-  tipoVoce: 'ORARIO' | 'GIORNALIERO' | 'KM' | 'RIMBORSO'
+  tipoVoce: 'ORARIO' | 'GIORNALIERO'
   tariffa: string
+  tariffaKm: string | null
   valuta: string
   oreGiornata: string
   dataInizio: string
@@ -38,16 +39,15 @@ type RigaListino = {
 const TIPI_VOCE = [
   { value: 'ORARIO', label: 'Orario (€/h)' },
   { value: 'GIORNALIERO', label: 'Giornaliero (€/g)' },
-  { value: 'KM', label: 'Chilometrico (€/km)' },
-  { value: 'RIMBORSO', label: 'Rimborso forfettario' },
 ]
 
 const formSchema = z.object({
   committenteId: z.coerce.number().int().positive('Committente obbligatorio'),
   clienteId: z.coerce.number().int().positive().nullable().optional(),
   tipoAttivitaId: z.coerce.number().int().positive().nullable().optional(),
-  tipoVoce: z.enum(['ORARIO', 'GIORNALIERO', 'KM', 'RIMBORSO']),
+  tipoVoce: z.enum(['ORARIO', 'GIORNALIERO']),
   tariffa: z.coerce.number().positive('Tariffa obbligatoria'),
+  tariffaKm: z.coerce.number().positive().nullable().optional(),
   oreGiornata: z.coerce.number().positive().default(8),
   dataInizio: z.string().min(1, 'Data inizio obbligatoria'),
   dataFine: z.string().nullable().optional(),
@@ -123,6 +123,7 @@ export default function ListinoTable({
       tipoAttivitaId: null,
       tipoVoce: 'ORARIO',
       tariffa: undefined,
+      tariffaKm: null,
       oreGiornata: 8,
       dataInizio: '',
       dataFine: null,
@@ -137,8 +138,9 @@ export default function ListinoTable({
       committenteId: row.committenteId,
       clienteId: row.clienteId ?? null,
       tipoAttivitaId: row.tipoAttivitaId ?? null,
-      tipoVoce: row.tipoVoce,
+      tipoVoce: row.tipoVoce === 'ORARIO' || row.tipoVoce === 'GIORNALIERO' ? row.tipoVoce : 'ORARIO',
       tariffa: parseFloat(row.tariffa),
+      tariffaKm: row.tariffaKm ? parseFloat(row.tariffaKm) : null,
       oreGiornata: parseFloat(row.oreGiornata),
       dataInizio: row.dataInizio ? row.dataInizio.split('T')[0] : '',
       dataFine: row.dataFine ? row.dataFine.split('T')[0] : null,
@@ -240,6 +242,7 @@ export default function ListinoTable({
                 <th className="text-left px-3 py-2.5 font-medium">Scope</th>
                 <th className="text-left px-3 py-2.5 font-medium">Tipo voce</th>
                 <th className="text-right px-3 py-2.5 font-medium">Tariffa</th>
+                <th className="text-right px-3 py-2.5 font-medium hidden lg:table-cell">€/km</th>
                 <th className="text-left px-3 py-2.5 font-medium hidden md:table-cell">Dal</th>
                 <th className="text-left px-3 py-2.5 font-medium hidden md:table-cell">Al</th>
                 <th className="px-3 py-2.5"></th>
@@ -260,6 +263,9 @@ export default function ListinoTable({
                     <td className="px-3 py-2.5 text-xs text-muted-foreground">{tipoVoceLabel(row.tipoVoce)}</td>
                     <td className="px-3 py-2.5 text-right font-mono text-sm">
                       € {parseFloat(row.tariffa).toFixed(2)}
+                    </td>
+                    <td className="px-3 py-2.5 text-right font-mono text-sm hidden lg:table-cell">
+                      {row.tariffaKm ? `€ ${parseFloat(row.tariffaKm).toFixed(3)}` : '—'}
                     </td>
                     <td className="px-3 py-2.5 text-xs text-muted-foreground hidden md:table-cell">{formatDate(row.dataInizio)}</td>
                     <td className="px-3 py-2.5 text-xs text-muted-foreground hidden md:table-cell">{formatDate(row.dataFine)}</td>
@@ -350,13 +356,13 @@ export default function ListinoTable({
               </Select>
             </div>
 
-            {/* Tipo voce + Tariffa */}
+            {/* Tipo voce + Tariffa + Tariffa km */}
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
                 <Label>Tipo voce *</Label>
                 <Select
                   value={watch('tipoVoce')}
-                  onValueChange={v => setValue('tipoVoce', v as 'ORARIO' | 'GIORNALIERO' | 'KM' | 'RIMBORSO')}
+                  onValueChange={v => setValue('tipoVoce', v as 'ORARIO' | 'GIORNALIERO')}
                 >
                   <SelectTrigger>
                     <SelectValue />
@@ -380,6 +386,22 @@ export default function ListinoTable({
                 />
                 {errors.tariffa && <p className="text-xs text-destructive">{errors.tariffa.message}</p>}
               </div>
+            </div>
+
+            {/* Tariffa km */}
+            <div className="space-y-1">
+              <Label>
+                Tariffa km (€/km){' '}
+                <span className="text-muted-foreground text-xs">(opzionale — usata per il rimborso km nelle spese)</span>
+              </Label>
+              <Input
+                type="number"
+                step="0.001"
+                min="0"
+                placeholder="es. 0,400"
+                className="max-w-40"
+                {...register('tariffaKm')}
+              />
             </div>
 
             {/* Ore giornata */}

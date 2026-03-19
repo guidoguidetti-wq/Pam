@@ -52,3 +52,28 @@ export async function getTariffa(
   })
   return r4?.tariffa ?? null
 }
+
+/**
+ * Risolve la tariffa km vigente (campo tariffaKm) per committente/cliente.
+ * Priorità: cliente specifico > default committente
+ */
+export async function getTariffaKm(
+  committenteId: number,
+  clienteId: number | null,
+  data: Date = new Date()
+): Promise<Decimal | null> {
+  const dove = {
+    committenteId,
+    tariffaKm: { not: null },
+    dataInizio: { lte: data },
+    OR: [{ dataFine: null }, { dataFine: { gte: data } }],
+  }
+
+  if (clienteId !== null) {
+    const r = await prisma.listino.findFirst({ where: { ...dove, clienteId } })
+    if (r?.tariffaKm) return r.tariffaKm
+  }
+
+  const r2 = await prisma.listino.findFirst({ where: { ...dove, clienteId: null } })
+  return r2?.tariffaKm ?? null
+}

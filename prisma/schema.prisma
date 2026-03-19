@@ -102,6 +102,7 @@ model Listino {
   tipoAttivitaId  Int?            @db.SmallInt @map("tipo_attivita_id")  // NULL = tutti i tipi
   tipoVoce        TipoVoceListino @map("tipo_voce")
   tariffa         Decimal         @db.Decimal(10, 4)
+  tariffaKm       Decimal?        @db.Decimal(10, 4) @map("tariffa_km")
   valuta          String          @default("EUR") @db.Char(3)
   oreGiornata     Decimal         @default(8.00)  @db.Decimal(4, 2) @map("ore_giornata")
   dataInizio      DateTime        @db.Date @map("data_inizio")
