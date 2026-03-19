@@ -1,4 +1,4 @@
-export const revalidate = 30
+export const dynamic = 'force-dynamic'
 
 import { prisma } from '@/lib/prisma'
 import ListinoTable from '@/components/anagrafica/ListinoTable'

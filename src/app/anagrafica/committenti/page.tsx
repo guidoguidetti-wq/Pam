@@ -1,4 +1,4 @@
-export const revalidate = 30
+export const dynamic = 'force-dynamic'
 
 import { auth } from '@/lib/auth'
 import { redirect } from 'next/navigation'
