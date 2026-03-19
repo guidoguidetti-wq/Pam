@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -105,6 +105,8 @@ export function AttivitaForm({
   const [deleting, setDeleting] = useState(false)
   const [loadingEvent, setLoadingEvent] = useState(false)
   const [loadingPrezzo, setLoadingPrezzo] = useState(false)
+  // Prevents the auto-fetch from overwriting the price loaded from a saved activity
+  const skipNextPrezzoFetch = useRef(false)
 
   const today = new Date().toISOString().split('T')[0]
 
@@ -167,7 +169,41 @@ export function AttivitaForm({
       .finally(() => setLoadingProgetti(false))
   }, [watchClienteId, watchCommittenteId])
 
-  // Funzione riutilizzabile per fetch prezzo dal listino
+  // Auto-fetch prezzo: si avvia quando cambiano committente/cliente/tipo/data.
+  // Usa AbortController per cancellare richieste precedenti (evita race condition).
+  // skipNextPrezzoFetch permette di evitare la sovrascrittura dopo reset() in edit mode.
+  useEffect(() => {
+    if (skipNextPrezzoFetch.current) {
+      skipNextPrezzoFetch.current = false
+      return
+    }
+    if (!watchCommittenteId) return
+
+    const controller = new AbortController()
+    const params = new URLSearchParams({ committente_id: watchCommittenteId })
+    if (watchClienteId) params.set('cliente_id', watchClienteId)
+    if (watchTipoAttivitaId) params.set('tipo_attivita_id', watchTipoAttivitaId)
+    if (watchDataAttivita) params.set('data', watchDataAttivita)
+
+    setLoadingPrezzo(true)
+    fetch(`/api/listino/prezzo?${params}`, { signal: controller.signal })
+      .then((r) => r.json())
+      .then((data: { tariffa: number | null }) => {
+        setValue('prezzoUnitarioTesto', data.tariffa != null ? String(data.tariffa) : '')
+      })
+      .catch((e: unknown) => {
+        if (e instanceof Error && e.name === 'AbortError') return
+        console.error(e)
+      })
+      .finally(() => setLoadingPrezzo(false))
+
+    return () => {
+      controller.abort()
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [watchCommittenteId, watchClienteId, watchTipoAttivitaId, watchDataAttivita])
+
+  // Ricalcola manuale dal pulsante (AbortController non necessario — singola invocazione)
   async function fetchPrezzo() {
     if (!watchCommittenteId) return
     const params = new URLSearchParams({ committente_id: watchCommittenteId })
@@ -185,12 +221,6 @@ export function AttivitaForm({
       setLoadingPrezzo(false)
     }
   }
-
-  // Fetch prezzo dal listino quando cambiano committente/cliente/tipo/data
-  useEffect(() => {
-    fetchPrezzo()
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [watchCommittenteId, watchClienteId, watchTipoAttivitaId, watchDataAttivita])
 
   // Calcola valoreAttivita automaticamente al cambio di prezzo o ore
   useEffect(() => {
@@ -230,6 +260,8 @@ export function AttivitaForm({
         }
 
         setModoOrari(true) // sempre mode orari in modifica
+        // Evita che l'auto-fetch sovrascriva il prezzo salvato nell'attività
+        skipNextPrezzoFetch.current = true
         reset({
           dataAttivita: ev.dataAttivita,
           oraInizio: ev.oraInizio,
