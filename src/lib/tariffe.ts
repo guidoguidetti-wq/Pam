@@ -74,7 +74,25 @@ export async function getTariffaDebug(
   if (r4) return { tariffa: r4.tariffa, debug: { ...debug, foundAt: 'step4 committente+tipoVoce' } }
 
   const r5 = await prisma.listino.findFirst({ where: { ...base, clienteId: null, tipoAttivitaId: null } })
-  return { tariffa: r5?.tariffa ?? null, debug: { ...debug, foundAt: r5 ? 'step5 committente default' : 'NOT FOUND' } }
+  if (r5) return { tariffa: r5.tariffa, debug: { ...debug, foundAt: 'step5 committente default' } }
+
+  // Fallback senza filtro date: prende il record più recente ignorando dataInizio/dataFine
+  // Utile quando l'attività ha data precedente alla dataInizio del listino
+  const noDate = { committenteId }
+  if (clienteId !== null) {
+    if (tipoAttivitaId) {
+      const r = await prisma.listino.findFirst({ where: { ...noDate, clienteId, tipoAttivitaId }, orderBy: { dataInizio: 'desc' } })
+      if (r) return { tariffa: r.tariffa, debug: { ...debug, foundAt: 'fallback cliente+tipo (no date)' } }
+    }
+    const r = await prisma.listino.findFirst({ where: { ...noDate, clienteId }, orderBy: { dataInizio: 'desc' } })
+    if (r) return { tariffa: r.tariffa, debug: { ...debug, foundAt: 'fallback cliente (no date)' } }
+  }
+  if (tipoAttivitaId) {
+    const r = await prisma.listino.findFirst({ where: { ...noDate, clienteId: null, tipoAttivitaId }, orderBy: { dataInizio: 'desc' } })
+    if (r) return { tariffa: r.tariffa, debug: { ...debug, foundAt: 'fallback committente+tipo (no date)' } }
+  }
+  const r6 = await prisma.listino.findFirst({ where: { ...noDate, clienteId: null, tipoAttivitaId: null }, orderBy: { dataInizio: 'desc' } })
+  return { tariffa: r6?.tariffa ?? null, debug: { ...debug, foundAt: r6 ? 'fallback committente default (no date)' : 'NOT FOUND' } }
 }
 
 /**
@@ -99,5 +117,14 @@ export async function getTariffaKm(
   }
 
   const r2 = await prisma.listino.findFirst({ where: { ...dove, clienteId: null } })
-  return r2?.tariffaKm ?? null
+  if (r2?.tariffaKm) return r2.tariffaKm
+
+  // Fallback senza filtro date
+  const noDate = { committenteId, tariffaKm: { not: null } }
+  if (clienteId !== null) {
+    const r = await prisma.listino.findFirst({ where: { ...noDate, clienteId }, orderBy: { dataInizio: 'desc' } })
+    if (r?.tariffaKm) return r.tariffaKm
+  }
+  const r3 = await prisma.listino.findFirst({ where: { ...noDate, clienteId: null }, orderBy: { dataInizio: 'desc' } })
+  return r3?.tariffaKm ?? null
 }
