@@ -15,54 +15,46 @@ export async function getTariffa(
   tipoVoce: TipoVoce,
   data: Date = new Date()
 ): Promise<Decimal | null> {
-  const dove = {
+  const base = {
     committenteId,
-    tipoVoce,
     dataInizio: { lte: data },
     OR: [{ dataFine: null }, { dataFine: { gte: data } }],
   }
+  const dove = { ...base, tipoVoce }
 
   if (clienteId !== null) {
-    // 1. Cliente + tipo specifico
+    // 1. Cliente + tipo specifico (con tipoVoce esatto, poi senza)
     if (tipoAttivitaId) {
-      const r = await prisma.listino.findFirst({
-        where: { ...dove, clienteId, tipoAttivitaId },
-      })
+      const r = await prisma.listino.findFirst({ where: { ...dove, clienteId, tipoAttivitaId } })
       if (r) return r.tariffa
+      const r1b = await prisma.listino.findFirst({ where: { ...base, clienteId, tipoAttivitaId } })
+      if (r1b) return r1b.tariffa
     }
 
-    // 2. Cliente, qualsiasi tipo
-    const r2 = await prisma.listino.findFirst({
-      where: { ...dove, clienteId, tipoAttivitaId: null },
-    })
+    // 2. Cliente, qualsiasi tipoAttivita (con tipoVoce esatto, poi senza)
+    const r2 = await prisma.listino.findFirst({ where: { ...dove, clienteId, tipoAttivitaId: null } })
     if (r2) return r2.tariffa
+    const r2b = await prisma.listino.findFirst({ where: { ...base, clienteId, tipoAttivitaId: null } })
+    if (r2b) return r2b.tariffa
+
+    // 2c. Cliente, qualsiasi tipoAttivita e qualsiasi tipoVoce (flat rate cliente)
+    const r2c = await prisma.listino.findFirst({ where: { ...base, clienteId } })
+    if (r2c) return r2c.tariffa
   }
 
-  // 3. Committente + tipo specifico (nessun cliente)
+  // 3. Committente + tipo specifico, nessun cliente (con tipoVoce esatto, poi senza)
   if (tipoAttivitaId) {
-    const r3 = await prisma.listino.findFirst({
-      where: { ...dove, clienteId: null, tipoAttivitaId },
-    })
+    const r3 = await prisma.listino.findFirst({ where: { ...dove, clienteId: null, tipoAttivitaId } })
     if (r3) return r3.tariffa
+    const r3b = await prisma.listino.findFirst({ where: { ...base, clienteId: null, tipoAttivitaId } })
+    if (r3b) return r3b.tariffa
   }
 
-  // 4. Default committente (stesso tipoVoce)
-  const r4 = await prisma.listino.findFirst({
-    where: { ...dove, clienteId: null, tipoAttivitaId: null },
-  })
+  // 4. Default committente (con tipoVoce esatto, poi senza)
+  const r4 = await prisma.listino.findFirst({ where: { ...dove, clienteId: null, tipoAttivitaId: null } })
   if (r4) return r4.tariffa
 
-  // 5. Fallback finale: default committente con qualsiasi tipoVoce
-  //    (gestisce il caso in cui il record default ha tipoVoce diverso da quello richiesto)
-  const r5 = await prisma.listino.findFirst({
-    where: {
-      committenteId,
-      clienteId: null,
-      tipoAttivitaId: null,
-      dataInizio: { lte: data },
-      OR: [{ dataFine: null }, { dataFine: { gte: data } }],
-    },
-  })
+  const r5 = await prisma.listino.findFirst({ where: { ...base, clienteId: null, tipoAttivitaId: null } })
   return r5?.tariffa ?? null
 }
 
