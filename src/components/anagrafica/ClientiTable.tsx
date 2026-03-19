@@ -6,7 +6,7 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { toast } from 'sonner'
-import { Plus, Pencil, Trash2, Users, CheckCircle2, XCircle } from 'lucide-react'
+import { Plus, Pencil, Trash2, Users, CheckCircle2, XCircle, Navigation, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -22,6 +22,7 @@ export type ClienteRow = {
   indirizzo: string | null
   email: string | null
   note: string | null
+  kmTrasferta: number | null
   attivo: boolean
   createdAt: string
   committenteId: number
@@ -38,6 +39,7 @@ const schema = z.object({
   indirizzo: z.string().trim().optional(),
   email: z.string().trim().max(150).optional(),
   note: z.string().trim().optional(),
+  kmTrasferta: z.coerce.number().int().min(0).max(99999).nullable().optional(),
   attivo: z.boolean(),
 })
 type FormData = z.infer<typeof schema>
@@ -54,6 +56,7 @@ export default function ClientiTable({
   const [editing, setEditing] = useState<ClienteRow | null>(null)
   const [deletingId, setDeletingId] = useState<number | null>(null)
   const [filterCommittente, setFilterCommittente] = useState<number | null>(null)
+  const [geoLoading, setGeoLoading] = useState(false)
 
   const form = useForm<FormData>({
     resolver: zodResolver(schema),
@@ -73,6 +76,7 @@ export default function ClientiTable({
       indirizzo: '',
       email: '',
       note: '',
+      kmTrasferta: null,
       attivo: true,
     })
     setOpen(true)
@@ -87,9 +91,57 @@ export default function ClientiTable({
       indirizzo: c.indirizzo ?? '',
       email: c.email ?? '',
       note: c.note ?? '',
+      kmTrasferta: c.kmTrasferta ?? null,
       attivo: c.attivo,
     })
     setOpen(true)
+  }
+
+  async function rilevaPosizione() {
+    const indirizzo = form.getValues('indirizzo')
+    if (!indirizzo?.trim()) {
+      toast.error("Inserisci prima l'indirizzo del cliente")
+      return
+    }
+    if (!navigator.geolocation) {
+      toast.error('Geolocalizzazione non supportata dal browser')
+      return
+    }
+    setGeoLoading(true)
+    try {
+      const pos = await new Promise<GeolocationPosition>((resolve, reject) =>
+        navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 10000 })
+      )
+      const { latitude: lat1, longitude: lon1 } = pos.coords
+
+      const nomRes = await fetch(
+        `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(indirizzo)}&format=json&limit=1`,
+        { headers: { 'User-Agent': 'PAM-PersonalActivityManager/1.0' } }
+      )
+      const nomData = await nomRes.json()
+      if (!nomData.length) throw new Error('Indirizzo non trovato nella mappa')
+
+      const lat2 = parseFloat(nomData[0].lat)
+      const lon2 = parseFloat(nomData[0].lon)
+
+      // Haversine
+      const R = 6371
+      const dLat = ((lat2 - lat1) * Math.PI) / 180
+      const dLon = ((lon2 - lon1) * Math.PI) / 180
+      const a =
+        Math.sin(dLat / 2) ** 2 +
+        Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLon / 2) ** 2
+      const kmOneway = R * 2 * Math.asin(Math.sqrt(a))
+      const kmAR = Math.round(kmOneway * 2)
+
+      form.setValue('kmTrasferta', kmAR)
+      toast.success(`Distanza A/R rilevata: ${kmAR} km (${Math.round(kmOneway)} km × 2)`)
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Errore geolocalizzazione'
+      toast.error(msg)
+    } finally {
+      setGeoLoading(false)
+    }
   }
 
   async function onSubmit(data: FormData) {
@@ -99,6 +151,7 @@ export default function ClientiTable({
       indirizzo: data.indirizzo || null,
       email: data.email || null,
       note: data.note || null,
+      kmTrasferta: data.kmTrasferta ?? null,
     }
     try {
       const url = editing ? `/api/clienti/${editing.id}` : '/api/clienti'
@@ -288,6 +341,40 @@ export default function ClientiTable({
             <div className="space-y-1.5">
               <Label htmlFor="indirizzo">Indirizzo</Label>
               <Input id="indirizzo" {...form.register('indirizzo')} />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="kmTrasferta">Km trasferta A/R (default)</Label>
+              <div className="flex gap-2">
+                <Input
+                  id="kmTrasferta"
+                  type="number"
+                  min="0"
+                  max="99999"
+                  step="1"
+                  placeholder="0"
+                  className="max-w-32"
+                  {...form.register('kmTrasferta', { valueAsNumber: true })}
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={rilevaPosizione}
+                  disabled={geoLoading}
+                  title="Rileva distanza dalla posizione attuale"
+                >
+                  {geoLoading ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Navigation className="h-4 w-4" />
+                  )}
+                  <span className="ml-1.5 hidden sm:inline">Rileva</span>
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Chilometri andata e ritorno — viene precompilato nelle spese km dell&apos;attività
+              </p>
             </div>
 
             <div className="space-y-1.5">

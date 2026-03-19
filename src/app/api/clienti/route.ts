@@ -19,6 +19,7 @@ const schema = z.object({
     z.string().email('Email non valida').nullable().optional()
   ),
   note: ns(),
+  kmTrasferta: z.number().int().min(0).max(99999).nullable().optional(),
   attivo: z.boolean().default(true),
 })
 

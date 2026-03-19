@@ -18,6 +18,7 @@ import {
 } from '@/components/ui/select'
 import { Loader2, Trash2, Clock, RefreshCw } from 'lucide-react'
 import { formatOre } from '@/lib/utils'
+import { SpeseSection } from './SpeseSection'
 
 // ── utilità ore ────────────────────────────────────────────────────────────
 
@@ -67,7 +68,7 @@ type FormData = z.infer<typeof schema>
 
 interface Committente { id: number; ragioneSociale: string }
 interface TipoAttivita { id: number; codice: string; descrizione: string }
-interface Cliente { id: number; ragioneSociale: string }
+interface Cliente { id: number; ragioneSociale: string; kmTrasferta: number | null }
 interface Progetto { id: number; nome: string }
 
 interface DefaultSlot {
@@ -132,6 +133,10 @@ export function AttivitaForm({
   const watchOraFine = watch('oraFine')
   const watchOreErogateTesto = watch('oreErogateTesto')
   const watchPrezzoUnitarioTesto = watch('prezzoUnitarioTesto')
+
+  // km trasferta default dal cliente selezionato
+  const kmDefaultTrasferta =
+    clienti.find((c) => String(c.id) === watchClienteId)?.kmTrasferta ?? null
 
   // Ore calcolate da inizio/fine (solo se modoOrari=true)
   const oreCalcolate = (() => {
@@ -564,6 +569,15 @@ export function AttivitaForm({
           />
         </div>
       </div>
+
+      {/* Spese */}
+      <SpeseSection
+        attivitaId={eventId}
+        dataAttivita={watchDataAttivita ?? today}
+        committenteId={watchCommittenteId ?? ''}
+        clienteId={watchClienteId ?? ''}
+        kmDefaultTrasferta={kmDefaultTrasferta}
+      />
 
       {/* Azioni */}
       <div className="flex gap-2 pt-2">

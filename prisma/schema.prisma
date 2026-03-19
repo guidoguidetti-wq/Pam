@@ -80,6 +80,7 @@ model Cliente {
   indirizzo      String?  @db.Text
   email          String?  @db.VarChar(150)
   note           String?  @db.Text
+  kmTrasferta    Int?     @map("km_trasferta")
   attivo         Boolean  @default(true)
   createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
 
