@@ -237,15 +237,15 @@ export default function ListinoTable({
           <table className="w-full text-sm">
             <thead className="bg-muted/50">
               <tr>
-                <th className="text-left px-3 py-2.5 font-medium">Committente</th>
-                <th className="text-left px-3 py-2.5 font-medium">Cliente</th>
-                <th className="text-left px-3 py-2.5 font-medium">Scope</th>
-                <th className="text-left px-3 py-2.5 font-medium">Tipo voce</th>
-                <th className="text-right px-3 py-2.5 font-medium">Tariffa</th>
-                <th className="text-right px-3 py-2.5 font-medium hidden lg:table-cell">€/km</th>
-                <th className="text-left px-3 py-2.5 font-medium hidden md:table-cell">Dal</th>
-                <th className="text-left px-3 py-2.5 font-medium hidden md:table-cell">Al</th>
-                <th className="px-3 py-2.5"></th>
+                <th className="text-left px-3 py-1.5 font-medium">Committente</th>
+                <th className="text-left px-3 py-1.5 font-medium">Cliente</th>
+                <th className="text-left px-3 py-1.5 font-medium">Scope</th>
+                <th className="text-left px-3 py-1.5 font-medium">Tipo voce</th>
+                <th className="text-right px-3 py-1.5 font-medium">Tariffa</th>
+                <th className="text-right px-3 py-1.5 font-medium hidden lg:table-cell">€/km</th>
+                <th className="text-left px-3 py-1.5 font-medium hidden md:table-cell">Dal</th>
+                <th className="text-left px-3 py-1.5 font-medium hidden md:table-cell">Al</th>
+                <th className="px-3 py-1.5"></th>
               </tr>
             </thead>
             <tbody className="divide-y">
@@ -253,23 +253,23 @@ export default function ListinoTable({
                 const { label, priority } = scopeLabel(row)
                 return (
                   <tr key={row.id} className="hover:bg-muted/30">
-                    <td className="px-3 py-2.5 font-medium text-xs">{row.committente.ragioneSociale}</td>
-                    <td className="px-3 py-2.5 text-xs text-muted-foreground">{row.cliente?.ragioneSociale ?? '—'}</td>
-                    <td className="px-3 py-2.5">
+                    <td className="px-3 py-1.5 font-medium text-xs">{row.committente.ragioneSociale}</td>
+                    <td className="px-3 py-1.5 text-xs text-muted-foreground">{row.cliente?.ragioneSociale ?? '—'}</td>
+                    <td className="px-3 py-1.5">
                       <span className={cn('inline-flex items-center px-2 py-0.5 rounded text-xs font-medium', PRIORITY_COLORS[priority])}>
                         P{priority} · {label}
                       </span>
                     </td>
-                    <td className="px-3 py-2.5 text-xs text-muted-foreground">{tipoVoceLabel(row.tipoVoce)}</td>
-                    <td className="px-3 py-2.5 text-right font-mono text-sm">
+                    <td className="px-3 py-1.5 text-xs text-muted-foreground">{tipoVoceLabel(row.tipoVoce)}</td>
+                    <td className="px-3 py-1.5 text-right font-mono text-sm">
                       € {parseFloat(row.tariffa).toFixed(2)}
                     </td>
-                    <td className="px-3 py-2.5 text-right font-mono text-sm hidden lg:table-cell">
+                    <td className="px-3 py-1.5 text-right font-mono text-sm hidden lg:table-cell">
                       {row.tariffaKm ? `€ ${parseFloat(row.tariffaKm).toFixed(3)}` : '—'}
                     </td>
-                    <td className="px-3 py-2.5 text-xs text-muted-foreground hidden md:table-cell">{formatDate(row.dataInizio)}</td>
-                    <td className="px-3 py-2.5 text-xs text-muted-foreground hidden md:table-cell">{formatDate(row.dataFine)}</td>
-                    <td className="px-3 py-2.5">
+                    <td className="px-3 py-1.5 text-xs text-muted-foreground hidden md:table-cell">{formatDate(row.dataInizio)}</td>
+                    <td className="px-3 py-1.5 text-xs text-muted-foreground hidden md:table-cell">{formatDate(row.dataFine)}</td>
+                    <td className="px-3 py-1.5">
                       <div className="flex items-center gap-1 justify-end">
                         <button onClick={() => openEdit(row)} className="p-1.5 rounded hover:bg-accent text-muted-foreground hover:text-foreground">
                           <Pencil className="h-3.5 w-3.5" />

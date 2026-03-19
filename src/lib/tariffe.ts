@@ -46,11 +46,24 @@ export async function getTariffa(
     if (r3) return r3.tariffa
   }
 
-  // 4. Default committente
+  // 4. Default committente (stesso tipoVoce)
   const r4 = await prisma.listino.findFirst({
     where: { ...dove, clienteId: null, tipoAttivitaId: null },
   })
-  return r4?.tariffa ?? null
+  if (r4) return r4.tariffa
+
+  // 5. Fallback finale: default committente con qualsiasi tipoVoce
+  //    (gestisce il caso in cui il record default ha tipoVoce diverso da quello richiesto)
+  const r5 = await prisma.listino.findFirst({
+    where: {
+      committenteId,
+      clienteId: null,
+      tipoAttivitaId: null,
+      dataInizio: { lte: data },
+      OR: [{ dataFine: null }, { dataFine: { gte: data } }],
+    },
+  })
+  return r5?.tariffa ?? null
 }
 
 /**

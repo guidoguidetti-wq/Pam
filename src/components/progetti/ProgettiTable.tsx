@@ -270,15 +270,15 @@ export default function ProgettiTable({
           <table className="w-full text-sm">
             <thead className="bg-muted/50">
               <tr>
-                <th className="text-left px-3 py-2.5 font-medium w-8"></th>
-                <th className="text-left px-3 py-2.5 font-medium">Progetto</th>
-                <th className="text-left px-3 py-2.5 font-medium hidden md:table-cell">Committente › Cliente</th>
-                <th className="text-left px-3 py-2.5 font-medium hidden sm:table-cell">Tipo</th>
-                <th className="text-left px-3 py-2.5 font-medium hidden lg:table-cell">Date</th>
-                <th className="text-right px-3 py-2.5 font-medium hidden md:table-cell">Stimate</th>
-                <th className="text-right px-3 py-2.5 font-medium hidden md:table-cell">Erogate</th>
-                <th className="text-center px-3 py-2.5 font-medium hidden sm:table-cell">Att.</th>
-                <th className="px-3 py-2.5"></th>
+                <th className="text-left px-3 py-1.5 font-medium w-8"></th>
+                <th className="text-left px-3 py-1.5 font-medium">Progetto</th>
+                <th className="text-left px-3 py-1.5 font-medium hidden md:table-cell">Committente › Cliente</th>
+                <th className="text-left px-3 py-1.5 font-medium hidden sm:table-cell">Tipo</th>
+                <th className="text-left px-3 py-1.5 font-medium hidden lg:table-cell">Date</th>
+                <th className="text-right px-3 py-1.5 font-medium hidden md:table-cell">Stimate</th>
+                <th className="text-right px-3 py-1.5 font-medium hidden md:table-cell">Erogate</th>
+                <th className="text-center px-3 py-1.5 font-medium hidden sm:table-cell">Att.</th>
+                <th className="px-3 py-1.5"></th>
               </tr>
             </thead>
             <tbody className="divide-y">
@@ -288,7 +288,7 @@ export default function ProgettiTable({
                     key={p.id}
                     className={cn('hover:bg-muted/30', !p.attivo && 'opacity-50')}
                   >
-                    <td className="px-3 py-2.5">
+                    <td className="px-3 py-1.5">
                       {p.tipoBudget === 'STIMATO' && p.stime.length > 0 && (
                         <button
                           onClick={() => setExpandedId(expandedId === p.id ? null : p.id)}
@@ -298,29 +298,29 @@ export default function ProgettiTable({
                         </button>
                       )}
                     </td>
-                    <td className="px-3 py-2.5">
+                    <td className="px-3 py-1.5">
                       <div className="font-medium">{p.nome}</div>
                       {p.codice && <div className="text-xs text-muted-foreground">{p.codice}</div>}
                     </td>
-                    <td className="px-3 py-2.5 hidden md:table-cell">
+                    <td className="px-3 py-1.5 hidden md:table-cell">
                       <div className="text-xs">
                         <span className="font-medium">{p.committente.ragioneSociale}</span>
                         <span className="text-muted-foreground"> › {p.cliente.ragioneSociale}</span>
                       </div>
                     </td>
-                    <td className="px-3 py-2.5 hidden sm:table-cell">
+                    <td className="px-3 py-1.5 hidden sm:table-cell">
                       <Badge variant={p.tipoBudget === 'STIMATO' ? 'default' : 'secondary'} className="text-xs">
                         {p.tipoBudget === 'STIMATO' ? 'Stimato' : 'Consuntivo'}
                       </Badge>
                     </td>
-                    <td className="px-3 py-2.5 hidden lg:table-cell text-xs text-muted-foreground">
+                    <td className="px-3 py-1.5 hidden lg:table-cell text-xs text-muted-foreground">
                       {formatDate(p.dataInizio)} {p.dataFinePrevista && `→ ${formatDate(p.dataFinePrevista)}`}
                     </td>
-                    <td className="px-3 py-2.5 hidden md:table-cell text-right text-xs text-muted-foreground">
+                    <td className="px-3 py-1.5 hidden md:table-cell text-right text-xs text-muted-foreground">
                       {p.tipoBudget === 'STIMATO' && p.oreStimaTotale > 0 ? formatOre(p.oreStimaTotale) : '—'}
                     </td>
                     <td className={cn(
-                      'px-3 py-2.5 hidden md:table-cell text-right text-xs font-medium',
+                      'px-3 py-1.5 hidden md:table-cell text-right text-xs font-medium',
                       p.tipoBudget === 'STIMATO' && p.oreStimaTotale > 0
                         ? p.oreErogateTotale >= p.oreStimaTotale
                           ? 'text-red-600 bg-red-50'
@@ -331,10 +331,10 @@ export default function ProgettiTable({
                     )}>
                       {p.oreErogateTotale > 0 ? formatOre(p.oreErogateTotale) : '—'}
                     </td>
-                    <td className="px-3 py-2.5 hidden sm:table-cell text-center text-xs text-muted-foreground">
+                    <td className="px-3 py-1.5 hidden sm:table-cell text-center text-xs text-muted-foreground">
                       {p._count.attivita}
                     </td>
-                    <td className="px-3 py-2.5">
+                    <td className="px-3 py-1.5">
                       <div className="flex items-center gap-1 justify-end">
                         <button onClick={() => openEdit(p)} className="p-1.5 rounded hover:bg-accent text-muted-foreground hover:text-foreground">
                           <Pencil className="h-3.5 w-3.5" />

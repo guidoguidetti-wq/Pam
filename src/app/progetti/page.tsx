@@ -22,8 +22,8 @@ export default async function ProgettiPage() {
 
   return (
     <AppLayout>
-      <div className="p-4 md:p-6">
-        <h1 className="text-xl font-semibold mb-4">Progetti</h1>
+      <div className="p-3">
+        <h1 className="text-xl font-semibold mb-3">Progetti</h1>
         <ProgettiTable committenti={committenti} tipiAttivita={tipiAttivita} />
       </div>
     </AppLayout>

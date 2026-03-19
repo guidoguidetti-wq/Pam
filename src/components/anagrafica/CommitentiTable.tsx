@@ -116,8 +116,8 @@ export default function CommitentiTable({ committenti }: { committenti: Committe
 
   return (
     <>
-      <div className="p-6">
-        <div className="flex items-center justify-between mb-6">
+      <div className="p-3">
+        <div className="flex items-center justify-between mb-3">
           <div>
             <h1 className="text-2xl font-bold">Committenti</h1>
             <p className="text-sm text-muted-foreground">{committenti.length} committenti</p>
@@ -129,7 +129,7 @@ export default function CommitentiTable({ committenti }: { committenti: Committe
         </div>
 
         {committenti.length === 0 ? (
-          <div className="text-center py-16 text-muted-foreground">
+          <div className="text-center py-8 text-muted-foreground">
             <Building2 className="h-10 w-10 mx-auto mb-3 opacity-30" />
             <p>Nessun committente. Creane uno!</p>
           </div>
@@ -138,31 +138,31 @@ export default function CommitentiTable({ committenti }: { committenti: Committe
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b bg-muted/50">
-                  <th className="text-left px-4 py-2.5 font-medium">Ragione sociale</th>
-                  <th className="text-left px-4 py-2.5 font-medium hidden md:table-cell">P.IVA</th>
-                  <th className="text-left px-4 py-2.5 font-medium hidden lg:table-cell">Email</th>
-                  <th className="text-left px-4 py-2.5 font-medium hidden lg:table-cell">Telefono</th>
-                  <th className="text-center px-4 py-2.5 font-medium hidden md:table-cell">Clienti</th>
-                  <th className="text-center px-4 py-2.5 font-medium">Attivo</th>
-                  <th className="px-4 py-2.5 w-20" />
+                  <th className="text-left px-4 py-1.5 font-medium">Ragione sociale</th>
+                  <th className="text-left px-4 py-1.5 font-medium hidden md:table-cell">P.IVA</th>
+                  <th className="text-left px-4 py-1.5 font-medium hidden lg:table-cell">Email</th>
+                  <th className="text-left px-4 py-1.5 font-medium hidden lg:table-cell">Telefono</th>
+                  <th className="text-center px-4 py-1.5 font-medium hidden md:table-cell">Clienti</th>
+                  <th className="text-center px-4 py-1.5 font-medium">Attivo</th>
+                  <th className="px-4 py-1.5 w-20" />
                 </tr>
               </thead>
               <tbody>
                 {committenti.map((c) => (
                   <tr key={c.id} className="border-b last:border-0 hover:bg-muted/30 transition-colors">
-                    <td className="px-4 py-3 font-medium">{c.ragioneSociale}</td>
-                    <td className="px-4 py-3 text-muted-foreground hidden md:table-cell">{c.partitaIva ?? '—'}</td>
-                    <td className="px-4 py-3 text-muted-foreground hidden lg:table-cell">{c.email ?? '—'}</td>
-                    <td className="px-4 py-3 text-muted-foreground hidden lg:table-cell">{c.telefono ?? '—'}</td>
-                    <td className="px-4 py-3 text-center hidden md:table-cell">
+                    <td className="px-3 py-1.5 font-medium">{c.ragioneSociale}</td>
+                    <td className="px-3 py-1.5 text-muted-foreground hidden md:table-cell">{c.partitaIva ?? '—'}</td>
+                    <td className="px-3 py-1.5 text-muted-foreground hidden lg:table-cell">{c.email ?? '—'}</td>
+                    <td className="px-3 py-1.5 text-muted-foreground hidden lg:table-cell">{c.telefono ?? '—'}</td>
+                    <td className="px-3 py-1.5 text-center hidden md:table-cell">
                       <Badge variant="secondary">{c._count.clienti}</Badge>
                     </td>
-                    <td className="px-4 py-3 text-center">
+                    <td className="px-3 py-1.5 text-center">
                       {c.attivo
                         ? <CheckCircle2 className="h-4 w-4 text-green-500 mx-auto" />
                         : <XCircle className="h-4 w-4 text-muted-foreground mx-auto" />}
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-3 py-1.5">
                       <div className="flex justify-end gap-1">
                         <Button variant="ghost" size="icon" onClick={() => openEdit(c)}>
                           <Pencil className="h-4 w-4" />

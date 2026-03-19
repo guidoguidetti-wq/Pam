@@ -21,7 +21,7 @@ import { Badge } from '@/components/ui/badge'
 import { TipiAttivitaDialog } from './TipiAttivitaDialog'
 import { AttivitaForm } from './AttivitaForm'
 import { formatOre, calcolaDurata, coloreCommittente, formatValuta } from '@/lib/utils'
-import { Plus, Settings2, Pencil, Loader2 } from 'lucide-react'
+import { Plus, Settings2, Pencil, Loader2, Trash2 } from 'lucide-react'
 
 interface Committente { id: number; ragioneSociale: string }
 interface TipoAttivita { id: number; codice: string; descrizione: string; attivo: boolean }
@@ -69,6 +69,7 @@ export function AttivitaTable({ committenti, tipiAttivita: initialTipi }: Attivi
   const [tipiDialogOpen, setTipiDialogOpen] = useState(false)
   const [formDialogOpen, setFormDialogOpen] = useState(false)
   const [editId, setEditId] = useState<string | undefined>(undefined)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
 
   const caricaAttivita = useCallback(async () => {
     setLoading(true)
@@ -104,6 +105,19 @@ export function AttivitaTable({ committenti, tipiAttivita: initialTipi }: Attivi
   function onDeleted() {
     setFormDialogOpen(false)
     caricaAttivita()
+  }
+
+  async function handleDeleteRow(id: string) {
+    if (!confirm('Eliminare questa attività?')) return
+    setDeletingId(id)
+    try {
+      const res = await fetch(`/api/attivita/${id}`, { method: 'DELETE' })
+      if (!res.ok) { toast.error('Errore durante l\'eliminazione'); return }
+      toast.success('Attività eliminata')
+      caricaAttivita()
+    } finally {
+      setDeletingId(null)
+    }
   }
 
   return (
@@ -166,16 +180,16 @@ export function AttivitaTable({ committenti, tipiAttivita: initialTipi }: Attivi
           <table className="w-full text-sm">
             <thead className="bg-muted/50">
               <tr>
-                <th className="text-left px-3 py-2 font-medium">Data</th>
-                <th className="text-left px-3 py-2 font-medium">Ore erogate</th>
-                <th className="text-left px-3 py-2 font-medium">Committente › Cliente</th>
-                <th className="text-left px-3 py-2 font-medium">Progetto</th>
-                <th className="text-left px-3 py-2 font-medium">Tipo</th>
-                <th className="text-left px-3 py-2 font-medium">Descrizione</th>
-                <th className="text-right px-3 py-2 font-medium hidden lg:table-cell">€/h</th>
-                <th className="text-right px-3 py-2 font-medium hidden lg:table-cell">Valore</th>
-                <th className="text-center px-3 py-2 font-medium">Fatt.</th>
-                <th className="px-3 py-2" />
+                <th className="text-left px-3 py-1 font-medium">Data</th>
+                <th className="text-left px-3 py-1 font-medium">Ore</th>
+                <th className="text-left px-3 py-1 font-medium">Committente › Cliente</th>
+                <th className="text-left px-3 py-1 font-medium hidden md:table-cell">Progetto</th>
+                <th className="text-left px-3 py-1 font-medium">Tipo</th>
+                <th className="text-left px-3 py-1 font-medium hidden md:table-cell">Descrizione</th>
+                <th className="text-right px-3 py-1 font-medium hidden lg:table-cell">€/h</th>
+                <th className="text-right px-3 py-1 font-medium hidden lg:table-cell">Valore</th>
+                <th className="text-center px-3 py-1 font-medium">Fatt.</th>
+                <th className="px-1 py-1" />
               </tr>
             </thead>
             <tbody>
@@ -184,13 +198,13 @@ export function AttivitaTable({ committenti, tipiAttivita: initialTipi }: Attivi
                 const colore = coloreCommittente(row.committenteId)
                 return (
                   <tr key={row.id} className="border-t hover:bg-muted/30">
-                    <td className="px-3 py-2 whitespace-nowrap">
+                    <td className="px-3 py-1 whitespace-nowrap text-xs">
                       {new Date(row.dataAttivita + 'T00:00:00').toLocaleDateString('it-IT')}
                     </td>
-                    <td className="px-3 py-2 whitespace-nowrap tabular-nums">
+                    <td className="px-3 py-1 whitespace-nowrap tabular-nums text-xs">
                       {formatOre(durata)}
                     </td>
-                    <td className="px-3 py-2">
+                    <td className="px-3 py-1 text-sm">
                       <span className="font-medium" style={{ color: colore }}>
                         {row.committente.ragioneSociale}
                       </span>
@@ -201,37 +215,50 @@ export function AttivitaTable({ committenti, tipiAttivita: initialTipi }: Attivi
                         </>
                       )}
                     </td>
-                    <td className="px-3 py-2 text-muted-foreground">
+                    <td className="px-3 py-1 text-muted-foreground text-xs hidden md:table-cell">
                       {row.progetto?.nome ?? '—'}
                     </td>
-                    <td className="px-3 py-2">
-                      <Badge variant="secondary">{row.tipoAttivita.codice}</Badge>
+                    <td className="px-3 py-1">
+                      <Badge variant="secondary" className="text-xs">{row.tipoAttivita.codice}</Badge>
                     </td>
-                    <td className="px-3 py-2 text-muted-foreground max-w-xs truncate">
+                    <td className="px-3 py-1 text-muted-foreground text-xs max-w-xs truncate hidden md:table-cell">
                       {row.descrizione ?? '—'}
                     </td>
-                    <td className="px-3 py-2 text-right tabular-nums text-xs hidden lg:table-cell">
+                    <td className="px-3 py-1 text-right tabular-nums text-xs hidden lg:table-cell">
                       {row.prezzoUnitario != null ? formatValuta(row.prezzoUnitario) : '—'}
                     </td>
-                    <td className="px-3 py-2 text-right tabular-nums text-xs hidden lg:table-cell">
+                    <td className="px-3 py-1 text-right tabular-nums text-xs hidden lg:table-cell">
                       {row.valoreAttivita != null ? formatValuta(row.valoreAttivita) : '—'}
                     </td>
-                    <td className="px-3 py-2 text-center">
+                    <td className="px-3 py-1 text-center">
                       {row.fatturabile ? (
-                        <span className="text-green-600">✓</span>
+                        <span className="text-green-600 text-xs">✓</span>
                       ) : (
-                        <span className="text-muted-foreground">—</span>
+                        <span className="text-muted-foreground text-xs">—</span>
                       )}
                     </td>
-                    <td className="px-3 py-2">
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="h-7 px-2"
-                        onClick={() => apriModifica(row.id)}
-                      >
-                        <Pencil className="h-3.5 w-3.5" />
-                      </Button>
+                    <td className="px-1 py-1">
+                      <div className="flex items-center gap-0.5">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-6 w-6 p-0"
+                          onClick={() => apriModifica(row.id)}
+                        >
+                          <Pencil className="h-3 w-3" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-6 w-6 p-0 text-destructive hover:text-destructive"
+                          disabled={deletingId === row.id}
+                          onClick={() => handleDeleteRow(row.id)}
+                        >
+                          {deletingId === row.id
+                            ? <Loader2 className="h-3 w-3 animate-spin" />
+                            : <Trash2 className="h-3 w-3" />}
+                        </Button>
+                      </div>
                     </td>
                   </tr>
                 )

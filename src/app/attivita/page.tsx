@@ -23,8 +23,8 @@ export default async function AttivitaPage() {
 
   return (
     <AppLayout>
-      <div className="p-6 space-y-4">
-        <h1 className="text-2xl font-bold">Attività</h1>
+      <div className="p-3 space-y-3">
+        <h1 className="text-xl font-bold">Attività</h1>
         <AttivitaTable committenti={committenti} tipiAttivita={tipiAttivita} />
       </div>
     </AppLayout>

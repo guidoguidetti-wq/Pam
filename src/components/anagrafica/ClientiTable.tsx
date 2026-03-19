@@ -206,8 +206,8 @@ export default function ClientiTable({
 
   return (
     <>
-      <div className="p-6">
-        <div className="flex items-center justify-between mb-6">
+      <div className="p-3">
+        <div className="flex items-center justify-between mb-3">
           <div>
             <h1 className="text-2xl font-bold">Clienti</h1>
             <p className="text-sm text-muted-foreground">{filtered.length} clienti</p>
@@ -246,7 +246,7 @@ export default function ClientiTable({
         </div>
 
         {filtered.length === 0 ? (
-          <div className="text-center py-16 text-muted-foreground">
+          <div className="text-center py-8 text-muted-foreground">
             <Users className="h-10 w-10 mx-auto mb-3 opacity-30" />
             <p>Nessun cliente.</p>
           </div>
@@ -255,37 +255,37 @@ export default function ClientiTable({
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b bg-muted/50">
-                  <th className="text-left px-4 py-2.5 font-medium">Ragione sociale</th>
-                  <th className="text-left px-4 py-2.5 font-medium hidden md:table-cell">Committente</th>
-                  <th className="text-left px-4 py-2.5 font-medium hidden lg:table-cell">P.IVA</th>
-                  <th className="text-left px-4 py-2.5 font-medium hidden lg:table-cell">Email</th>
-                  <th className="text-center px-4 py-2.5 font-medium hidden md:table-cell">Attività</th>
-                  <th className="text-center px-4 py-2.5 font-medium">Attivo</th>
-                  <th className="px-4 py-2.5 w-20" />
+                  <th className="text-left px-3 py-1.5 font-medium">Ragione sociale</th>
+                  <th className="text-left px-3 py-1.5 font-medium hidden md:table-cell">Committente</th>
+                  <th className="text-left px-3 py-1.5 font-medium hidden lg:table-cell">Indirizzo</th>
+                  <th className="text-right px-3 py-1.5 font-medium hidden lg:table-cell">Km A/R</th>
+                  <th className="text-center px-3 py-1.5 font-medium hidden md:table-cell">Attività</th>
+                  <th className="text-center px-3 py-1.5 font-medium">Attivo</th>
+                  <th className="px-3 py-1.5 w-20" />
                 </tr>
               </thead>
               <tbody>
                 {filtered.map((c) => (
                   <tr key={c.id} className="border-b last:border-0 hover:bg-muted/30 transition-colors">
-                    <td className="px-4 py-3 font-medium">{c.ragioneSociale}</td>
-                    <td className="px-4 py-3 text-muted-foreground hidden md:table-cell">
+                    <td className="px-3 py-1.5 font-medium">{c.ragioneSociale}</td>
+                    <td className="px-3 py-1.5 text-muted-foreground hidden md:table-cell">
                       {c.committente.ragioneSociale}
                     </td>
-                    <td className="px-4 py-3 text-muted-foreground hidden lg:table-cell">
-                      {c.partitaIva ?? '—'}
+                    <td className="px-3 py-1.5 text-muted-foreground hidden lg:table-cell max-w-xs truncate">
+                      {c.indirizzo ?? '—'}
                     </td>
-                    <td className="px-4 py-3 text-muted-foreground hidden lg:table-cell">
-                      {c.email ?? '—'}
+                    <td className="px-3 py-1.5 text-right tabular-nums hidden lg:table-cell">
+                      {c.kmTrasferta != null ? `${c.kmTrasferta} km` : '—'}
                     </td>
-                    <td className="px-4 py-3 text-center hidden md:table-cell">
+                    <td className="px-3 py-1.5 text-center hidden md:table-cell">
                       <Badge variant="secondary">{c._count.attivita}</Badge>
                     </td>
-                    <td className="px-4 py-3 text-center">
+                    <td className="px-3 py-1.5 text-center">
                       {c.attivo
                         ? <CheckCircle2 className="h-4 w-4 text-green-500 mx-auto" />
                         : <XCircle className="h-4 w-4 text-muted-foreground mx-auto" />}
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-3 py-1.5">
                       <div className="flex justify-end gap-1">
                         <Button variant="ghost" size="icon" onClick={() => openEdit(c)}>
                           <Pencil className="h-4 w-4" />

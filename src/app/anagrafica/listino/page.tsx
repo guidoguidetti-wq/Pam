@@ -22,8 +22,8 @@ export default async function ListinoPage() {
 
   return (
     <AppLayout>
-      <div className="p-4 md:p-6">
-        <h1 className="text-xl font-semibold mb-4">Listino tariffe</h1>
+      <div className="p-3">
+        <h1 className="text-xl font-semibold mb-3">Listino tariffe</h1>
         <ListinoTable committenti={committenti} tipiAttivita={tipiAttivita} />
       </div>
     </AppLayout>
