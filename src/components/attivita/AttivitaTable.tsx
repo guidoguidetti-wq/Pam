@@ -47,6 +47,7 @@ interface AttivitaRow {
   fatturabile: boolean
   prezzoUnitario: number | null
   valoreAttivita: number | null
+  totaleSpese: number
   committente: { ragioneSociale: string }
   cliente: { ragioneSociale: string } | null
   tipoAttivita: { codice: string }
@@ -58,21 +59,20 @@ interface AttivitaTableProps {
   tipiAttivita: TipoAttivita[]
 }
 
-function primoGiornoMese(): string {
-  const d = new Date()
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`
+function primoGiornoAnno(): string {
+  return `${new Date().getFullYear()}-01-01`
 }
 
-function oggi(): string {
-  return new Date().toISOString().split('T')[0]
+function fineAnno(): string {
+  return `${new Date().getFullYear()}-12-31`
 }
 
 export function AttivitaTable({ committenti, tipiAttivita: initialTipi }: AttivitaTableProps) {
   const [tipiAttivita, setTipiAttivita] = useState(initialTipi)
   const [attivita, setAttivita] = useState<AttivitaRow[]>([])
   const [loading, setLoading] = useState(false)
-  const [from, setFrom] = useState(primoGiornoMese())
-  const [to, setTo] = useState(oggi())
+  const [from, setFrom] = useState(primoGiornoAnno())
+  const [to, setTo] = useState(fineAnno())
   const [filterCommittente, setFilterCommittente] = useState('')
   const [tipiDialogOpen, setTipiDialogOpen] = useState(false)
   const [formDialogOpen, setFormDialogOpen] = useState(false)
@@ -146,6 +146,8 @@ export function AttivitaTable({ committenti, tipiAttivita: initialTipi }: Attivi
     return acc + (row.oreErogate ?? calcolaDurata(row.oraInizio, row.oraFine))
   }, 0)
   const totaleValore = attivita.reduce((acc, row) => acc + (row.valoreAttivita ?? 0), 0)
+  const totaleSpese = attivita.reduce((acc, row) => acc + (row.totaleSpese ?? 0), 0)
+  const totaleGenerale = totaleValore + totaleSpese
 
   return (
     <div className="space-y-4">
@@ -203,7 +205,13 @@ export function AttivitaTable({ committenti, tipiAttivita: initialTipi }: Attivi
             Ore erogate: <span className="font-medium text-foreground tabular-nums">{formatOre(totaleOreMin)}</span>
           </span>
           <span className="text-muted-foreground">
-            Valore: <span className="font-medium text-foreground tabular-nums">{formatValuta(totaleValore)}</span>
+            Competenze: <span className="font-medium text-foreground tabular-nums">{formatValuta(totaleValore)}</span>
+          </span>
+          <span className="text-muted-foreground">
+            Spese: <span className="font-medium text-foreground tabular-nums">{formatValuta(totaleSpese)}</span>
+          </span>
+          <span className="text-muted-foreground font-medium">
+            Totale: <span className="text-foreground tabular-nums">{formatValuta(totaleGenerale)}</span>
           </span>
         </div>
       )}

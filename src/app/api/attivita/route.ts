@@ -55,6 +55,7 @@ type AttivitaWithRel = {
   cliente: { ragioneSociale: string } | null
   tipoAttivita: { codice: string; descrizione: string }
   progetto: { nome: string } | null
+  spese: { importoTotale: { toString(): string } }[]
 }
 
 function serialize(row: AttivitaWithRel) {
@@ -76,6 +77,7 @@ function serialize(row: AttivitaWithRel) {
     fatturabile: row.fatturabile,
     prezzoUnitario: row.prezzoUnitario ? parseFloat(row.prezzoUnitario.toString()) : null,
     valoreAttivita: row.valoreAttivita ? parseFloat(row.valoreAttivita.toString()) : null,
+    totaleSpese: row.spese.reduce((sum, s) => sum + parseFloat(s.importoTotale.toString()), 0),
     committente: row.committente,
     cliente: row.cliente,
     tipoAttivita: row.tipoAttivita,
@@ -94,6 +96,7 @@ const includeRelations = {
   cliente: { select: { ragioneSociale: true } },
   tipoAttivita: { select: { codice: true, descrizione: true } },
   progetto: { select: { nome: true } },
+  spese: { select: { importoTotale: true } },
 }
 
 export async function GET(req: NextRequest) {
