@@ -16,7 +16,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Loader2, Trash2, Clock, RefreshCw } from 'lucide-react'
+import { Loader2, Trash2, Clock, RefreshCw, Plus } from 'lucide-react'
 import { formatOre } from '@/lib/utils'
 import { SpeseSection } from './SpeseSection'
 
@@ -84,6 +84,8 @@ interface AttivitaFormProps {
   defaultSlot?: DefaultSlot
   onSaved: () => void
   onDeleted?: () => void
+  onClose?: () => void
+  onNuova?: () => void
 }
 
 // ── componente ─────────────────────────────────────────────────────────────
@@ -95,6 +97,8 @@ export function AttivitaForm({
   defaultSlot,
   onSaved,
   onDeleted,
+  onClose,
+  onNuova,
 }: AttivitaFormProps) {
   const [modoOrari, setModoOrari] = useState(true) // true = specifica inizio/fine, false = specifica ore erogate
   const [clienti, setClienti] = useState<Cliente[]>([])
@@ -105,6 +109,7 @@ export function AttivitaForm({
   const [deleting, setDeleting] = useState(false)
   const [loadingEvent, setLoadingEvent] = useState(false)
   const [loadingPrezzo, setLoadingPrezzo] = useState(false)
+  const [activeEventId, setActiveEventId] = useState<string | undefined>(eventId)
   // Prevents the auto-fetch from overwriting the price loaded from a saved activity
   const skipNextPrezzoFetch = useRef(false)
 
@@ -330,8 +335,8 @@ export function AttivitaForm({
         ? { ...base, oraInizio: data.oraInizio, oraFine: data.oraFine }
         : { ...base, oreErogate: parseOreInput(data.oreErogateTesto ?? '')! }
 
-      const url = eventId ? `/api/attivita/${eventId}` : '/api/attivita'
-      const method = eventId ? 'PUT' : 'POST'
+      const url = activeEventId ? `/api/attivita/${activeEventId}` : '/api/attivita'
+      const method = activeEventId ? 'PUT' : 'POST'
       const res = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
@@ -342,19 +347,35 @@ export function AttivitaForm({
         toast.error(err.error ?? 'Errore salvataggio')
         return
       }
-      toast.success(eventId ? 'Attività aggiornata' : 'Attività creata')
+      const saved = await res.json()
+      if (!activeEventId) setActiveEventId(String(saved.id))
+      toast.success(activeEventId ? 'Attività aggiornata' : 'Attività creata')
       onSaved()
     } finally {
       setSubmitting(false)
     }
   }
 
+  function handleNuova() {
+    setActiveEventId(undefined)
+    setModoOrari(true)
+    setClienti([])
+    setProgetti([])
+    reset({
+      dataAttivita: today,
+      oraInizio: '09:00',
+      oraFine: '10:00',
+      fatturabile: true,
+    })
+    onNuova?.()
+  }
+
   async function handleDelete() {
-    if (!eventId) return
+    if (!activeEventId) return
     if (!confirm('Eliminare questa attività?')) return
     setDeleting(true)
     try {
-      const res = await fetch(`/api/attivita/${eventId}`, { method: 'DELETE' })
+      const res = await fetch(`/api/attivita/${activeEventId}`, { method: 'DELETE' })
       if (!res.ok) {
         const err = await res.json()
         toast.error(err.error ?? 'Errore eliminazione')
@@ -380,13 +401,34 @@ export function AttivitaForm({
   const fatturabile = watch('fatturabile')
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="space-y-2 px-1">
+    <form onSubmit={handleSubmit(onSubmit)} className="space-y-1.5 px-1">
 
-      {/* Data */}
-      <div className="space-y-1">
-        <Label htmlFor="dataAttivita">Data</Label>
-        <Input id="dataAttivita" type="date" {...register('dataAttivita')} />
-        {errors.dataAttivita && <p className="text-xs text-destructive">{errors.dataAttivita.message}</p>}
+      {/* Data + Tipo attività */}
+      <div className="grid grid-cols-2 gap-2">
+        <div className="space-y-0.5">
+          <Label htmlFor="dataAttivita">Data</Label>
+          <Input id="dataAttivita" type="date" {...register('dataAttivita')} />
+          {errors.dataAttivita && <p className="text-xs text-destructive">{errors.dataAttivita.message}</p>}
+        </div>
+        <div className="space-y-0.5">
+          <Label>Tipo attività</Label>
+          <Select
+            value={watch('tipoAttivitaId') ?? ''}
+            onValueChange={(v) => setValue('tipoAttivitaId', v, { shouldValidate: true })}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Seleziona tipo..." />
+            </SelectTrigger>
+            <SelectContent>
+              {tipiAttivita.map((t) => (
+                <SelectItem key={t.id} value={String(t.id)}>
+                  {t.codice} — {t.descrizione}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {errors.tipoAttivitaId && <p className="text-xs text-destructive">{errors.tipoAttivitaId.message}</p>}
+        </div>
       </div>
 
       {/* Toggle modo */}
@@ -439,7 +481,7 @@ export function AttivitaForm({
       )}
 
       {/* Committente */}
-      <div className="space-y-1">
+      <div className="space-y-0.5">
         <Label>Committente</Label>
         <Select
           value={watchCommittenteId ?? ''}
@@ -464,76 +506,55 @@ export function AttivitaForm({
         {errors.committenteId && <p className="text-xs text-destructive">{errors.committenteId.message}</p>}
       </div>
 
-      {/* Cliente */}
-      <div className="space-y-1">
-        <Label>Cliente <span className="text-muted-foreground text-xs">(opzionale)</span></Label>
-        <Select
-          value={watchClienteId || '__none__'}
-          onValueChange={(v) => {
-            setValue('clienteId', v === '__none__' ? '' : v, { shouldValidate: true })
-            setValue('progettoId', '')
-          }}
-          disabled={!watchCommittenteId || loadingClienti}
-        >
-          <SelectTrigger>
-            <SelectValue placeholder={loadingClienti ? 'Caricamento...' : 'Nessun cliente'} />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="__none__">— Nessun cliente —</SelectItem>
-            {clienti.map((c) => (
-              <SelectItem key={c.id} value={String(c.id)}>
-                {c.ragioneSociale}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-
-      {/* Progetto */}
-      <div className="space-y-1">
-        <Label>Progetto (opzionale)</Label>
-        <Select
-          value={watch('progettoId') ?? ''}
-          onValueChange={(v) => setValue('progettoId', v === '__none__' ? '' : v)}
-          disabled={!watchClienteId || loadingProgetti}
-        >
-          <SelectTrigger>
-            <SelectValue placeholder={loadingProgetti ? 'Caricamento...' : 'Nessun progetto'} />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="__none__">— Nessun progetto —</SelectItem>
-            {progetti.map((p) => (
-              <SelectItem key={p.id} value={String(p.id)}>
-                {p.nome}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-
-      {/* Tipo attività */}
-      <div className="space-y-1">
-        <Label>Tipo attività</Label>
-        <Select
-          value={watch('tipoAttivitaId') ?? ''}
-          onValueChange={(v) => setValue('tipoAttivitaId', v, { shouldValidate: true })}
-        >
-          <SelectTrigger>
-            <SelectValue placeholder="Seleziona tipo..." />
-          </SelectTrigger>
-          <SelectContent>
-            {tipiAttivita.map((t) => (
-              <SelectItem key={t.id} value={String(t.id)}>
-                {t.codice} — {t.descrizione}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        {errors.tipoAttivitaId && <p className="text-xs text-destructive">{errors.tipoAttivitaId.message}</p>}
+      {/* Cliente + Progetto */}
+      <div className="grid grid-cols-2 gap-2">
+        <div className="space-y-0.5">
+          <Label>Cliente <span className="text-muted-foreground text-xs font-normal">(opz.)</span></Label>
+          <Select
+            value={watchClienteId || '__none__'}
+            onValueChange={(v) => {
+              setValue('clienteId', v === '__none__' ? '' : v, { shouldValidate: true })
+              setValue('progettoId', '')
+            }}
+            disabled={!watchCommittenteId || loadingClienti}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder={loadingClienti ? 'Caricamento...' : 'Nessun cliente'} />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__none__">— Nessun cliente —</SelectItem>
+              {clienti.map((c) => (
+                <SelectItem key={c.id} value={String(c.id)}>
+                  {c.ragioneSociale}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-0.5">
+          <Label>Progetto <span className="text-muted-foreground text-xs font-normal">(opz.)</span></Label>
+          <Select
+            value={watch('progettoId') ?? ''}
+            onValueChange={(v) => setValue('progettoId', v === '__none__' ? '' : v)}
+            disabled={!watchClienteId || loadingProgetti}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder={loadingProgetti ? 'Caricamento...' : 'Nessun progetto'} />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__none__">— Nessun progetto —</SelectItem>
+              {progetti.map((p) => (
+                <SelectItem key={p.id} value={String(p.id)}>
+                  {p.nome}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
       {/* Descrizione */}
-      <div className="space-y-1">
+      <div className="space-y-0.5">
         <Label htmlFor="descrizione">Descrizione</Label>
         <textarea
           id="descrizione"
@@ -545,7 +566,7 @@ export function AttivitaForm({
       </div>
 
       {/* Note interne */}
-      <div className="space-y-1">
+      <div className="space-y-0.5">
         <Label htmlFor="noteInterne">Note interne</Label>
         <textarea
           id="noteInterne"
@@ -568,7 +589,7 @@ export function AttivitaForm({
 
       {/* Prezzo unitario + Valore attività */}
       <div className="grid grid-cols-2 gap-2">
-        <div className="space-y-1">
+        <div className="space-y-0.5">
           <Label htmlFor="prezzoUnitarioTesto">Prezzo €/h</Label>
           <div className="flex gap-1">
             <Input
@@ -591,7 +612,7 @@ export function AttivitaForm({
             </button>
           </div>
         </div>
-        <div className="space-y-1">
+        <div className="space-y-0.5">
           <Label htmlFor="valoreAttivitaTesto">Valore €</Label>
           <Input
             id="valoreAttivitaTesto"
@@ -606,7 +627,7 @@ export function AttivitaForm({
 
       {/* Spese */}
       <SpeseSection
-        attivitaId={eventId}
+        attivitaId={activeEventId}
         dataAttivita={watchDataAttivita ?? today}
         committenteId={watchCommittenteId ?? ''}
         clienteId={watchClienteId ?? ''}
@@ -615,11 +636,21 @@ export function AttivitaForm({
 
       {/* Azioni */}
       <div className="flex gap-2 pt-1">
-        <Button type="submit" disabled={submitting} className="flex-1">
+        <Button type="submit" disabled={submitting}>
           {submitting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-          {eventId ? 'Salva modifiche' : 'Crea attività'}
+          {activeEventId ? 'Salva modifiche' : 'Crea attività'}
         </Button>
-        {eventId && (
+        {onNuova && (
+          <Button type="button" variant="outline" onClick={handleNuova} title="Nuova attività">
+            <Plus className="h-4 w-4 mr-1" /> Nuova
+          </Button>
+        )}
+        {onClose && (
+          <Button type="button" variant="outline" onClick={onClose}>
+            Esci
+          </Button>
+        )}
+        {activeEventId && (
           <Button type="button" variant="destructive" onClick={handleDelete} disabled={deleting}>
             {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
           </Button>

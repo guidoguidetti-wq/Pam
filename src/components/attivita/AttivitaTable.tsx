@@ -17,11 +17,19 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Badge } from '@/components/ui/badge'
 import { TipiAttivitaDialog } from './TipiAttivitaDialog'
 import { AttivitaForm } from './AttivitaForm'
-import { formatOre, calcolaDurata, coloreCommittente, formatValuta } from '@/lib/utils'
+import { cn, formatOre, calcolaDurata, coloreCommittente, formatValuta } from '@/lib/utils'
 import { Plus, Settings2, Pencil, Loader2, Trash2, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react'
+
+const TIPO_COLORS: Record<string, string> = {
+  COM: 'bg-blue-100 text-blue-700',
+  PRE: 'bg-violet-100 text-violet-700',
+  PMG: 'bg-amber-100 text-amber-700',
+  BAN: 'bg-cyan-100 text-cyan-700',
+  SVI: 'bg-emerald-100 text-emerald-700',
+  OPS: 'bg-rose-100 text-rose-700',
+}
 
 interface Committente { id: number; ragioneSociale: string }
 interface TipoAttivita { id: number; codice: string; descrizione: string; attivo: boolean }
@@ -99,8 +107,16 @@ export function AttivitaTable({ committenti, tipiAttivita: initialTipi }: Attivi
   }
 
   function onSaved() {
+    caricaAttivita()
+  }
+
+  function onClose() {
     setFormDialogOpen(false)
     caricaAttivita()
+  }
+
+  function onNuova() {
+    setEditId(undefined)
   }
 
   function onDeleted() {
@@ -259,7 +275,9 @@ export function AttivitaTable({ committenti, tipiAttivita: initialTipi }: Attivi
                       {row.progetto?.nome ?? '—'}
                     </td>
                     <td className="px-3 py-1">
-                      <Badge variant="secondary" className="text-xs">{row.tipoAttivita.codice}</Badge>
+                      <span className={cn('inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium', TIPO_COLORS[row.tipoAttivita.codice] ?? 'bg-muted text-muted-foreground')}>
+                        {row.tipoAttivita.codice}
+                      </span>
                     </td>
                     <td className="px-3 py-1 text-muted-foreground text-xs max-w-xs truncate hidden md:table-cell">
                       {row.descrizione ?? '—'}
@@ -321,6 +339,8 @@ export function AttivitaTable({ committenti, tipiAttivita: initialTipi }: Attivi
               eventId={editId}
               onSaved={onSaved}
               onDeleted={onDeleted}
+              onClose={onClose}
+              onNuova={onNuova}
             />
           )}
         </DialogContent>
