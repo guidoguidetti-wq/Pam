@@ -254,6 +254,7 @@ export function AttivitaTable({ committenti, tipiAttivita: initialTipi }: Attivi
                 <th className="text-right px-3 py-1 font-medium hidden lg:table-cell">€/h</th>
                 <th className="text-right px-3 py-1 font-medium hidden lg:table-cell">Valore</th>
                 <th className="text-center px-3 py-1 font-medium">Fatt.</th>
+                <th className="text-center px-3 py-1 font-medium hidden lg:table-cell">Spese</th>
                 <th className="px-1 py-1" />
               </tr>
             </thead>
@@ -300,6 +301,13 @@ export function AttivitaTable({ committenti, tipiAttivita: initialTipi }: Attivi
                     <td className="px-3 py-1 text-center">
                       {row.fatturabile ? (
                         <span className="text-green-600 text-xs">✓</span>
+                      ) : (
+                        <span className="text-muted-foreground text-xs">—</span>
+                      )}
+                    </td>
+                    <td className="px-3 py-1 text-center hidden lg:table-cell">
+                      {row.totaleSpese > 0 ? (
+                        <span className="text-blue-600 text-xs font-medium">✓</span>
                       ) : (
                         <span className="text-muted-foreground text-xs">—</span>
                       )}

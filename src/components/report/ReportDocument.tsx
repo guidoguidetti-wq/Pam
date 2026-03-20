@@ -18,7 +18,8 @@ export interface ReportAttivita {
   oraInizio: string
   oraFine: string
   oreErogate: number // minuti
-  tipoAttivita: string
+  tipoAttivita: string   // descrizione del tipo
+  descrizione: string | null
   progetto: string | null
   prezzoUnitario: number | null
   valoreAttivita: number | null
@@ -174,16 +175,17 @@ const S = StyleSheet.create({
   cellText:  { fontSize: 7.5, paddingHorizontal: 2 },
   cellRight: { fontSize: 7.5, paddingHorizontal: 2, textAlign: 'right' },
   cellCenter:{ fontSize: 7.5, paddingHorizontal: 2, textAlign: 'center' },
-  // Activity column widths
-  cData:     { width: 54 },
-  cOrario:   { width: 74 },
-  cDurata:   { width: 44 },
-  cTipo:     { width: 34 },
-  cProgetto: { width: 167 },
-  cTariffa:  { width: 54 },
-  cValore:   { width: 60 },
-  cF:        { width: 24 },
-  cS:        { width: 24 },
+  // Activity column widths (sum = 535)
+  cData:     { width: 50 },
+  cOrario:   { width: 62 },
+  cDurata:   { width: 36 },
+  cTipo:     { width: 85 },
+  cProgetto: { width: 85 },
+  cDesc:     { width: 85 },
+  cTariffa:  { width: 48 },
+  cValore:   { width: 56 },
+  cF:        { width: 14 },
+  cS:        { width: 14 },
   // Totali cliente
   totaliRow: {
     flexDirection: 'row',
@@ -267,8 +269,9 @@ function AttivitaTable({ attivita }: { attivita: ReportAttivita[] }) {
         <Text style={[S.hdrText, S.cData]}>Data</Text>
         <Text style={[S.hdrText, S.cOrario]}>Orario</Text>
         <Text style={[S.hdrText, S.cDurata]}>Durata</Text>
-        <Text style={[S.hdrText, S.cTipo]}>Tipo</Text>
+        <Text style={[S.hdrText, S.cTipo]}>Tipo attivita</Text>
         <Text style={[S.hdrText, S.cProgetto]}>Progetto</Text>
+        <Text style={[S.hdrText, S.cDesc]}>Descrizione</Text>
         <Text style={[S.hdrText, S.cTariffa, { textAlign: 'right' }]}>{'\u20AC'}/h</Text>
         <Text style={[S.hdrText, S.cValore, { textAlign: 'right' }]}>Valore</Text>
         <Text style={[S.hdrText, S.cF, { textAlign: 'center' }]}>F</Text>
@@ -281,6 +284,7 @@ function AttivitaTable({ attivita }: { attivita: ReportAttivita[] }) {
           <Text style={[S.cellText, S.cDurata]}>{fmtOre(a.oreErogate)}</Text>
           <Text style={[S.cellText, S.cTipo]}>{a.tipoAttivita}</Text>
           <Text style={[S.cellText, S.cProgetto]}>{a.progetto ?? '—'}</Text>
+          <Text style={[S.cellText, S.cDesc]}>{a.descrizione ?? '—'}</Text>
           <Text style={[S.cellRight, S.cTariffa]}>{fmtEur(a.prezzoUnitario)}</Text>
           <Text style={[S.cellRight, S.cValore]}>{fmtEur(a.valoreAttivita)}</Text>
           <Text style={[S.cellCenter, S.cF, { color: a.fatturabile ? GREEN : MUTED }]}>

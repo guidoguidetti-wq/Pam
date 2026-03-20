@@ -43,7 +43,7 @@ export async function GET(req: NextRequest) {
           ...(committenteIdParam ? { committenteId: parseInt(committenteIdParam) } : {}),
         },
         include: {
-          tipoAttivita: { select: { codice: true } },
+          tipoAttivita: { select: { descrizione: true } },
           progetto: { select: { nome: true } },
           cliente: { select: { id: true, ragioneSociale: true } },
           spese: {
@@ -117,7 +117,8 @@ export async function GET(req: NextRequest) {
           const [hf, mf] = oraFine.split(':').map(Number)
           return (hf * 60 + mf) - (hi * 60 + mi)
         })(),
-        tipoAttivita: a.tipoAttivita.codice,
+        tipoAttivita: a.tipoAttivita.descrizione,
+        descrizione: a.descrizione,
         progetto: a.progetto?.nome ?? null,
         prezzoUnitario: a.prezzoUnitario ? parseFloat(a.prezzoUnitario.toString()) : null,
         valoreAttivita: a.valoreAttivita ? parseFloat(a.valoreAttivita.toString()) : null,
