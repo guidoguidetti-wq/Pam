@@ -25,7 +25,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       <aside className="hidden md:flex w-52 flex-col border-r bg-card shrink-0">
         <div className="px-4 py-4 border-b flex items-center justify-center">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/api/logo" alt="PAM" className="h-10 w-auto object-contain" />
+          <img src="/api/logo" alt="PAM" className="h-16 w-auto object-contain" />
         </div>
 
         <nav className="flex-1 overflow-y-auto p-2 space-y-0.5">

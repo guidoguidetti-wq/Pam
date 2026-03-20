@@ -101,7 +101,7 @@ export default function CalendarioInterno({ committenti, tipiAttivita }: Calenda
           <SheetHeader>
             <SheetTitle>{editId ? 'Modifica attività' : 'Nuova attività'}</SheetTitle>
           </SheetHeader>
-          <div className="mt-4">
+          <div className="mt-2">
             {sheetOpen && (
               <AttivitaForm
                 committenti={committenti}

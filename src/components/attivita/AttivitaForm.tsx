@@ -390,7 +390,7 @@ export function AttivitaForm({
       </div>
 
       {/* Toggle modo */}
-      <div className="flex items-center gap-3 py-1">
+      <div className="flex items-center gap-3">
         <Switch
           id="modoOrari"
           checked={modoOrari}
@@ -538,8 +538,8 @@ export function AttivitaForm({
         <textarea
           id="descrizione"
           {...register('descrizione')}
-          rows={2}
-          className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          rows={1}
+          className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           placeholder="Descrizione attività..."
         />
       </div>
@@ -550,8 +550,8 @@ export function AttivitaForm({
         <textarea
           id="noteInterne"
           {...register('noteInterne')}
-          rows={2}
-          className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          rows={1}
+          className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           placeholder="Note non visibili nel report..."
         />
       </div>
@@ -614,7 +614,7 @@ export function AttivitaForm({
       />
 
       {/* Azioni */}
-      <div className="flex gap-2 pt-2">
+      <div className="flex gap-2 pt-1">
         <Button type="submit" disabled={submitting} className="flex-1">
           {submitting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
           {eventId ? 'Salva modifiche' : 'Crea attività'}

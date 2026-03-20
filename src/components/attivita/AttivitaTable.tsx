@@ -21,7 +21,7 @@ import { Badge } from '@/components/ui/badge'
 import { TipiAttivitaDialog } from './TipiAttivitaDialog'
 import { AttivitaForm } from './AttivitaForm'
 import { formatOre, calcolaDurata, coloreCommittente, formatValuta } from '@/lib/utils'
-import { Plus, Settings2, Pencil, Loader2, Trash2 } from 'lucide-react'
+import { Plus, Settings2, Pencil, Loader2, Trash2, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react'
 
 interface Committente { id: number; ragioneSociale: string }
 interface TipoAttivita { id: number; codice: string; descrizione: string; attivo: boolean }
@@ -70,6 +70,7 @@ export function AttivitaTable({ committenti, tipiAttivita: initialTipi }: Attivi
   const [formDialogOpen, setFormDialogOpen] = useState(false)
   const [editId, setEditId] = useState<string | undefined>(undefined)
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
 
   const caricaAttivita = useCallback(async () => {
     setLoading(true)
@@ -120,6 +121,16 @@ export function AttivitaTable({ committenti, tipiAttivita: initialTipi }: Attivi
     }
   }
 
+  const attivitaOrdinata = [...attivita].sort((a, b) => {
+    const cmp = a.dataAttivita.localeCompare(b.dataAttivita)
+    return sortDir === 'asc' ? cmp : -cmp
+  })
+
+  const totaleOreMin = attivita.reduce((acc, row) => {
+    return acc + (row.oreErogate ?? calcolaDurata(row.oraInizio, row.oraFine))
+  }, 0)
+  const totaleValore = attivita.reduce((acc, row) => acc + (row.valoreAttivita ?? 0), 0)
+
   return (
     <div className="space-y-4">
       {/* Filter bar */}
@@ -166,6 +177,21 @@ export function AttivitaTable({ committenti, tipiAttivita: initialTipi }: Attivi
         </div>
       </div>
 
+      {/* Totali selezione */}
+      {!loading && attivita.length > 0 && (
+        <div className="flex gap-4 text-sm px-1">
+          <span className="text-muted-foreground">
+            <span className="font-medium text-foreground">{attivita.length}</span> attività
+          </span>
+          <span className="text-muted-foreground">
+            Ore erogate: <span className="font-medium text-foreground tabular-nums">{formatOre(totaleOreMin)}</span>
+          </span>
+          <span className="text-muted-foreground">
+            Valore: <span className="font-medium text-foreground tabular-nums">{formatValuta(totaleValore)}</span>
+          </span>
+        </div>
+      )}
+
       {/* Tabella */}
       {loading ? (
         <div className="flex justify-center py-10">
@@ -180,7 +206,21 @@ export function AttivitaTable({ committenti, tipiAttivita: initialTipi }: Attivi
           <table className="w-full text-sm">
             <thead className="bg-muted/50">
               <tr>
-                <th className="text-left px-3 py-1 font-medium">Data</th>
+                <th className="text-left px-3 py-1 font-medium">
+                  <button
+                    onClick={() => setSortDir((d) => d === 'asc' ? 'desc' : 'asc')}
+                    className="flex items-center gap-1 hover:text-foreground text-foreground"
+                  >
+                    Data
+                    {sortDir === 'asc' ? (
+                      <ArrowUp className="h-3 w-3" />
+                    ) : sortDir === 'desc' ? (
+                      <ArrowDown className="h-3 w-3" />
+                    ) : (
+                      <ArrowUpDown className="h-3 w-3 opacity-40" />
+                    )}
+                  </button>
+                </th>
                 <th className="text-left px-3 py-1 font-medium">Ore</th>
                 <th className="text-left px-3 py-1 font-medium">Committente › Cliente</th>
                 <th className="text-left px-3 py-1 font-medium hidden md:table-cell">Progetto</th>
@@ -193,7 +233,7 @@ export function AttivitaTable({ committenti, tipiAttivita: initialTipi }: Attivi
               </tr>
             </thead>
             <tbody>
-              {attivita.map((row) => {
+              {attivitaOrdinata.map((row) => {
                 const durata = row.oreErogate ?? calcolaDurata(row.oraInizio, row.oraFine)
                 const colore = coloreCommittente(row.committenteId)
                 return (

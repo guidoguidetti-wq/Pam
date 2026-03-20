@@ -431,8 +431,8 @@ export default function ListinoTable({
             <div className="space-y-1">
               <Label>Note</Label>
               <textarea
-                rows={2}
-                className="w-full px-3 py-2 border rounded-md text-sm bg-background resize-none focus:outline-none focus:ring-2 focus:ring-ring"
+                rows={1}
+                className="w-full px-3 py-1.5 border rounded-md text-sm bg-background resize-none focus:outline-none focus:ring-2 focus:ring-ring"
                 {...register('note')}
               />
             </div>

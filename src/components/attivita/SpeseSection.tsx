@@ -72,6 +72,8 @@ export function SpeseSection({
   const [dataSpesa, setDataSpesa] = useState(dataAttivita)
   const [rimborso, setRimborso] = useState(true)
   const [loadingKmPrice, setLoadingKmPrice] = useState(false)
+  // Track whether the user has manually edited quantita after opening the form
+  const kmUserEdited = useRef(false)
 
   // Load existing spese
   useEffect(() => {
@@ -100,6 +102,14 @@ export function SpeseSection({
       .finally(() => setLoadingKmPrice(false))
   }, [tipo, committenteId, clienteId, dataSpesa, adding])
 
+  // Se kmDefaultTrasferta arriva dopo l'apertura del form (race condition sulla fetch clienti),
+  // aggiorna quantita solo se l'utente non ha ancora modificato manualmente il campo
+  useEffect(() => {
+    if (adding && tipo === 'KM' && !kmUserEdited.current && kmDefaultTrasferta != null) {
+      setQuantita(String(kmDefaultTrasferta))
+    }
+  }, [kmDefaultTrasferta, adding, tipo])
+
   // Auto-calc total for KM
   useEffect(() => {
     if (tipo !== 'KM') return
@@ -111,9 +121,10 @@ export function SpeseSection({
   }, [quantita, importoUnitario, tipo])
 
   function openAddForm() {
+    kmUserEdited.current = false
     setTipo('KM')
     setDescrizione('')
-    setQuantita(kmDefaultTrasferta ? String(kmDefaultTrasferta) : '')
+    setQuantita(kmDefaultTrasferta != null ? String(kmDefaultTrasferta) : '')
     setImportoUnitario('')
     setImportoTotale('')
     setDataSpesa(dataAttivita)
@@ -122,11 +133,12 @@ export function SpeseSection({
   }
 
   function handleTipoChange(v: TipoSpesa) {
+    kmUserEdited.current = false
     setTipo(v)
     setDescrizione('')
     setImportoTotale('')
     if (v === 'KM') {
-      setQuantita(kmDefaultTrasferta ? String(kmDefaultTrasferta) : '')
+      setQuantita(kmDefaultTrasferta != null ? String(kmDefaultTrasferta) : '')
       setImportoUnitario('')
     } else {
       setQuantita('')
@@ -377,7 +389,10 @@ export function SpeseSection({
                   min="0"
                   step="1"
                   value={quantita}
-                  onChange={(e) => setQuantita(e.target.value)}
+                  onChange={(e) => {
+                    kmUserEdited.current = true
+                    setQuantita(e.target.value)
+                  }}
                   className="h-8 text-xs"
                   placeholder="0"
                 />

@@ -192,8 +192,8 @@ export default function CommitentiTable({ committenti }: { committenti: Committe
             <DialogTitle>{editing ? 'Modifica committente' : 'Nuovo committente'}</DialogTitle>
           </DialogHeader>
 
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            <div className="space-y-1.5">
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-2">
+            <div className="space-y-1">
               <Label htmlFor="ragioneSociale">Ragione sociale *</Label>
               <Input id="ragioneSociale" {...form.register('ragioneSociale')} />
               {form.formState.errors.ragioneSociale && (
@@ -201,39 +201,39 @@ export default function CommitentiTable({ committenti }: { committenti: Committe
               )}
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
+            <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-1">
                 <Label htmlFor="partitaIva">Partita IVA</Label>
                 <Input id="partitaIva" {...form.register('partitaIva')} />
               </div>
-              <div className="space-y-1.5">
+              <div className="space-y-1">
                 <Label htmlFor="codiceFiscale">Codice fiscale</Label>
                 <Input id="codiceFiscale" {...form.register('codiceFiscale')} />
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
+            <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-1">
                 <Label htmlFor="email">Email</Label>
                 <Input id="email" type="email" {...form.register('email')} />
               </div>
-              <div className="space-y-1.5">
+              <div className="space-y-1">
                 <Label htmlFor="telefono">Telefono</Label>
                 <Input id="telefono" {...form.register('telefono')} />
               </div>
             </div>
 
-            <div className="space-y-1.5">
+            <div className="space-y-1">
               <Label htmlFor="indirizzo">Indirizzo</Label>
               <Input id="indirizzo" {...form.register('indirizzo')} />
             </div>
 
-            <div className="space-y-1.5">
+            <div className="space-y-1">
               <Label htmlFor="note">Note</Label>
               <textarea
                 id="note"
-                rows={2}
-                className="w-full px-3 py-2 text-sm border rounded-md bg-background resize-y focus:outline-none focus:ring-2 focus:ring-ring"
+                rows={1}
+                className="w-full px-3 py-1.5 text-sm border rounded-md bg-background resize-y focus:outline-none focus:ring-2 focus:ring-ring"
                 {...form.register('note')}
               />
             </div>

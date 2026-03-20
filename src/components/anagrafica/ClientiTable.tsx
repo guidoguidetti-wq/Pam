@@ -206,23 +206,23 @@ export default function ClientiTable({
 
   return (
     <>
-      <div className="p-3">
-        <div className="flex items-center justify-between mb-3">
+      <div className="p-2">
+        <div className="flex items-center justify-between mb-2">
           <div>
-            <h1 className="text-2xl font-bold">Clienti</h1>
-            <p className="text-sm text-muted-foreground">{filtered.length} clienti</p>
+            <h1 className="text-xl font-bold">Clienti</h1>
+            <p className="text-xs text-muted-foreground">{filtered.length} clienti</p>
           </div>
-          <Button onClick={openCreate}>
+          <Button size="sm" onClick={openCreate}>
             <Plus className="h-4 w-4 mr-1.5" />
             Nuovo
           </Button>
         </div>
 
         {/* Filtro committente */}
-        <div className="mb-4 flex gap-2 flex-wrap">
+        <div className="mb-2 flex gap-1.5 flex-wrap">
           <button
             onClick={() => setFilterCommittente(null)}
-            className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
+            className={`px-2.5 py-0.5 rounded-full text-xs font-medium border transition-colors ${
               filterCommittente === null
                 ? 'bg-primary text-primary-foreground border-primary'
                 : 'border-border text-muted-foreground hover:bg-muted'
@@ -234,7 +234,7 @@ export default function ClientiTable({
             <button
               key={c.id}
               onClick={() => setFilterCommittente(c.id)}
-              className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
+              className={`px-2.5 py-0.5 rounded-full text-xs font-medium border transition-colors ${
                 filterCommittente === c.id
                   ? 'bg-primary text-primary-foreground border-primary'
                   : 'border-border text-muted-foreground hover:bg-muted'
@@ -255,37 +255,37 @@ export default function ClientiTable({
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b bg-muted/50">
-                  <th className="text-left px-3 py-1.5 font-medium">Ragione sociale</th>
-                  <th className="text-left px-3 py-1.5 font-medium hidden md:table-cell">Committente</th>
-                  <th className="text-left px-3 py-1.5 font-medium hidden lg:table-cell">Indirizzo</th>
-                  <th className="text-right px-3 py-1.5 font-medium hidden lg:table-cell">Km A/R</th>
-                  <th className="text-center px-3 py-1.5 font-medium hidden md:table-cell">Attività</th>
-                  <th className="text-center px-3 py-1.5 font-medium">Attivo</th>
-                  <th className="px-3 py-1.5 w-20" />
+                  <th className="text-left px-3 py-1 font-medium">Ragione sociale</th>
+                  <th className="text-left px-3 py-1 font-medium hidden md:table-cell">Committente</th>
+                  <th className="text-left px-3 py-1 font-medium hidden lg:table-cell">Indirizzo</th>
+                  <th className="text-right px-3 py-1 font-medium hidden lg:table-cell">Km A/R</th>
+                  <th className="text-center px-3 py-1 font-medium hidden md:table-cell">Attività</th>
+                  <th className="text-center px-3 py-1 font-medium">Attivo</th>
+                  <th className="px-3 py-1 w-20" />
                 </tr>
               </thead>
               <tbody>
                 {filtered.map((c) => (
                   <tr key={c.id} className="border-b last:border-0 hover:bg-muted/30 transition-colors">
-                    <td className="px-3 py-1.5 font-medium">{c.ragioneSociale}</td>
-                    <td className="px-3 py-1.5 text-muted-foreground hidden md:table-cell">
+                    <td className="px-3 py-1 font-medium">{c.ragioneSociale}</td>
+                    <td className="px-3 py-1 text-muted-foreground hidden md:table-cell">
                       {c.committente.ragioneSociale}
                     </td>
-                    <td className="px-3 py-1.5 text-muted-foreground hidden lg:table-cell max-w-xs truncate">
+                    <td className="px-3 py-1 text-muted-foreground hidden lg:table-cell max-w-xs truncate">
                       {c.indirizzo ?? '—'}
                     </td>
-                    <td className="px-3 py-1.5 text-right tabular-nums hidden lg:table-cell">
+                    <td className="px-3 py-1 text-right tabular-nums hidden lg:table-cell">
                       {c.kmTrasferta != null ? `${c.kmTrasferta} km` : '—'}
                     </td>
-                    <td className="px-3 py-1.5 text-center hidden md:table-cell">
+                    <td className="px-3 py-1 text-center hidden md:table-cell">
                       <Badge variant="secondary">{c._count.attivita}</Badge>
                     </td>
-                    <td className="px-3 py-1.5 text-center">
+                    <td className="px-3 py-1 text-center">
                       {c.attivo
                         ? <CheckCircle2 className="h-4 w-4 text-green-500 mx-auto" />
                         : <XCircle className="h-4 w-4 text-muted-foreground mx-auto" />}
                     </td>
-                    <td className="px-3 py-1.5">
+                    <td className="px-3 py-1">
                       <div className="flex justify-end gap-1">
                         <Button variant="ghost" size="icon" onClick={() => openEdit(c)}>
                           <Pencil className="h-4 w-4" />
@@ -315,8 +315,8 @@ export default function ClientiTable({
             <DialogTitle>{editing ? 'Modifica cliente' : 'Nuovo cliente'}</DialogTitle>
           </DialogHeader>
 
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            <div className="space-y-1.5">
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-2">
+            <div className="space-y-1">
               <Label>Committente *</Label>
               <Select
                 value={form.watch('committenteId')?.toString()}
@@ -338,7 +338,7 @@ export default function ClientiTable({
               )}
             </div>
 
-            <div className="space-y-1.5">
+            <div className="space-y-1">
               <Label htmlFor="ragioneSociale">Ragione sociale *</Label>
               <Input id="ragioneSociale" {...form.register('ragioneSociale')} />
               {form.formState.errors.ragioneSociale && (
@@ -346,23 +346,23 @@ export default function ClientiTable({
               )}
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
+            <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-1">
                 <Label htmlFor="partitaIva">Partita IVA</Label>
                 <Input id="partitaIva" {...form.register('partitaIva')} />
               </div>
-              <div className="space-y-1.5">
+              <div className="space-y-1">
                 <Label htmlFor="email">Email</Label>
                 <Input id="email" type="email" {...form.register('email')} />
               </div>
             </div>
 
-            <div className="space-y-1.5">
+            <div className="space-y-1">
               <Label htmlFor="indirizzo">Indirizzo</Label>
               <Input id="indirizzo" {...form.register('indirizzo')} />
             </div>
 
-            <div className="space-y-1.5">
+            <div className="space-y-1">
               <Label htmlFor="kmTrasferta">Km trasferta A/R (default)</Label>
               <div className="flex gap-2">
                 <Input
@@ -396,12 +396,12 @@ export default function ClientiTable({
               </p>
             </div>
 
-            <div className="space-y-1.5">
+            <div className="space-y-1">
               <Label htmlFor="note">Note</Label>
               <textarea
                 id="note"
-                rows={2}
-                className="w-full px-3 py-2 text-sm border rounded-md bg-background resize-y focus:outline-none focus:ring-2 focus:ring-ring"
+                rows={1}
+                className="w-full px-3 py-1 text-sm border rounded-md bg-background resize-y focus:outline-none focus:ring-2 focus:ring-ring"
                 {...form.register('note')}
               />
             </div>
