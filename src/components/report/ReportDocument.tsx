@@ -379,6 +379,7 @@ function SpeseSection({ clienti }: { clienti: ReportCliente[] }) {
           </Text>
           <View style={S.allegatiGrid}>
             {allegatiImg.map((a, i) => (
+              // eslint-disable-next-line jsx-a11y/alt-text
               <Image key={i} src={a.storageUrl!} style={S.allegatiImg} />
             ))}
           </View>

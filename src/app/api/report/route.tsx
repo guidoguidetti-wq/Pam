@@ -3,8 +3,9 @@ import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import React from 'react'
 import { renderToBuffer } from '@react-pdf/renderer'
+import type { DocumentProps } from '@react-pdf/renderer'
 import { ReportDocument } from '@/components/report/ReportDocument'
-import type { ReportCommittente, ReportCliente, ReportAttivita, ReportSpesa } from '@/components/report/ReportDocument'
+import type { ReportCommittente, ReportAttivita, ReportSpesa } from '@/components/report/ReportDocument'
 
 export async function GET(req: NextRequest) {
   const session = await auth()
@@ -135,9 +136,8 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Nessuna attività nel periodo selezionato' }, { status: 404 })
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const buffer = await renderToBuffer(
-      React.createElement(ReportDocument, { committenti, from, to, includeSpese }) as any
+      React.createElement(ReportDocument, { committenti, from, to, includeSpese }) as React.ReactElement<DocumentProps>
     )
 
     const fromLabel = from.replace(/-/g, '')
