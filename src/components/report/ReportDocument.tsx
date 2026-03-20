@@ -241,8 +241,8 @@ const S = StyleSheet.create({
   allegatiSection:    { marginTop: 10 },
   allegatiTitle:      { fontSize: 8, fontFamily: 'Helvetica-Bold', color: MUTED, marginBottom: 6 },
   allegatiGrid:       { flexDirection: 'row', flexWrap: 'wrap' },
-  allegatiItem:       { marginRight: 12, marginBottom: 12, width: 240 },
-  allegatiImg:        { width: 240, height: 180 },
+  allegatiItem:       { marginRight: 12, marginBottom: 12, width: 250 },
+  allegatiImg:        { width: 250 },
   allegatiCaption:    { fontSize: 7, color: MUTED, marginTop: 3 },
   // Footer
   footer: {
@@ -290,8 +290,8 @@ function AttivitaTable({ attivita }: { attivita: ReportAttivita[] }) {
           <Text style={[S.cellCenter, S.cF, { color: a.fatturabile ? GREEN : MUTED }]}>
             {a.fatturabile ? 'V' : '-'}
           </Text>
-          <Text style={[S.cellCenter, S.cS, { color: a.hasSpese ? SECONDARY : MUTED }]}>
-            {a.hasSpese ? 'V' : '-'}
+          <Text style={[S.cellCenter, S.cS, { color: SECONDARY }]}>
+            {a.hasSpese ? 'V' : ''}
           </Text>
         </View>
       ))}

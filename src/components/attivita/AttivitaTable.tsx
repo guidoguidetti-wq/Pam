@@ -306,10 +306,8 @@ export function AttivitaTable({ committenti, tipiAttivita: initialTipi }: Attivi
                       )}
                     </td>
                     <td className="px-3 py-1 text-center hidden lg:table-cell">
-                      {row.totaleSpese > 0 ? (
+                      {row.totaleSpese > 0 && (
                         <span className="text-blue-600 text-xs font-medium">✓</span>
-                      ) : (
-                        <span className="text-muted-foreground text-xs">—</span>
                       )}
                     </td>
                     <td className="px-1 py-1">
