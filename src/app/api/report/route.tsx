@@ -83,7 +83,7 @@ export async function GET(req: NextRequest) {
       if (!committente) continue
 
       const clienteKey = a.clienteId ?? null
-      const clienteNome = a.cliente?.ragioneSociale ?? 'Senza cliente'
+      const clienteNome = a.cliente?.ragioneSociale ?? committente.ragioneSociale
 
       let cliente = committente.clienti.find(cl => cl.id === clienteKey)
       if (!cliente) {

@@ -236,10 +236,12 @@ const S = StyleSheet.create({
   sCUnit:    { width: 64 },
   sCTotale:  { width: 80 },
   // Allegati
-  allegatiSection: { marginTop: 10 },
-  allegatiTitle:   { fontSize: 8, fontFamily: 'Helvetica-Bold', color: MUTED, marginBottom: 6 },
-  allegatiGrid:    { flexDirection: 'row', flexWrap: 'wrap' },
-  allegatiImg:     { width: 115, height: 86, marginRight: 8, marginBottom: 8 },
+  allegatiSection:    { marginTop: 10 },
+  allegatiTitle:      { fontSize: 8, fontFamily: 'Helvetica-Bold', color: MUTED, marginBottom: 6 },
+  allegatiGrid:       { flexDirection: 'row', flexWrap: 'wrap' },
+  allegatiItem:       { marginRight: 12, marginBottom: 12, width: 240 },
+  allegatiImg:        { width: 240, height: 180 },
+  allegatiCaption:    { fontSize: 7, color: MUTED, marginTop: 3 },
   // Footer
   footer: {
     position: 'absolute',
@@ -282,10 +284,10 @@ function AttivitaTable({ attivita }: { attivita: ReportAttivita[] }) {
           <Text style={[S.cellRight, S.cTariffa]}>{fmtEur(a.prezzoUnitario)}</Text>
           <Text style={[S.cellRight, S.cValore]}>{fmtEur(a.valoreAttivita)}</Text>
           <Text style={[S.cellCenter, S.cF, { color: a.fatturabile ? GREEN : MUTED }]}>
-            {a.fatturabile ? '\u2713' : '\u2014'}
+            {a.fatturabile ? 'V' : '-'}
           </Text>
           <Text style={[S.cellCenter, S.cS, { color: a.hasSpese ? SECONDARY : MUTED }]}>
-            {a.hasSpese ? '\u2713' : '\u2014'}
+            {a.hasSpese ? 'V' : '-'}
           </Text>
         </View>
       ))}
@@ -306,11 +308,11 @@ function TotaliCliente({ attivita }: { attivita: ReportAttivita[] }) {
         <Text style={S.totaleVal}>{fmtGiorni(oreMin)}</Text>
       </View>
       <View style={S.totaleItem}>
-        <Text style={S.totaleLbl}>Fatturabile</Text>
+        <Text style={S.totaleLbl}>Valore Attivita</Text>
         <Text style={[S.totaleVal, { color: GREEN }]}>{fmtEur(valFatt)}</Text>
       </View>
       <View style={S.totaleItem}>
-        <Text style={S.totaleLbl}>Non fatturabile</Text>
+        <Text style={S.totaleLbl}>Valore Non Fatturabile</Text>
         <Text style={[S.totaleVal, { color: MUTED }]}>{fmtEur(valNonFatt)}</Text>
       </View>
     </View>
@@ -319,6 +321,7 @@ function TotaliCliente({ attivita }: { attivita: ReportAttivita[] }) {
 
 function SpeseSection({ clienti }: { clienti: ReportCliente[] }) {
   type SpesaExt = ReportSpesa & { clienteNome: string }
+  type AllegatoExt = ReportSpesa['allegati'][0] & { clienteNome: string; dataSpesa: string }
   const allSpese: SpesaExt[] = []
   for (const cl of clienti) {
     for (const a of cl.attivita) {
@@ -330,8 +333,10 @@ function SpeseSection({ clienti }: { clienti: ReportCliente[] }) {
   if (allSpese.length === 0) return null
 
   const totale = allSpese.reduce((sum, s) => sum + s.importoTotale, 0)
-  const allegatiImg = allSpese.flatMap(s =>
-    s.allegati.filter(a => a.tipoMime?.startsWith('image/') && a.storageUrl)
+  const allegatiImg: AllegatoExt[] = allSpese.flatMap(s =>
+    s.allegati
+      .filter(a => a.tipoMime?.startsWith('image/') && a.storageUrl)
+      .map(a => ({ ...a, clienteNome: s.clienteNome, dataSpesa: s.dataSpesa }))
   )
 
   return (
@@ -379,8 +384,13 @@ function SpeseSection({ clienti }: { clienti: ReportCliente[] }) {
           </Text>
           <View style={S.allegatiGrid}>
             {allegatiImg.map((a, i) => (
-              // eslint-disable-next-line jsx-a11y/alt-text
-              <Image key={i} src={a.storageUrl!} style={S.allegatiImg} />
+              <View key={i} style={S.allegatiItem}>
+                {/* eslint-disable-next-line jsx-a11y/alt-text */}
+                <Image src={a.storageUrl!} style={S.allegatiImg} />
+                <Text style={S.allegatiCaption}>
+                  {fmtData(a.dataSpesa)} - {a.clienteNome}
+                </Text>
+              </View>
             ))}
           </View>
         </View>

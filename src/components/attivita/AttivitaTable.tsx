@@ -94,7 +94,8 @@ export function AttivitaTable({ committenti, tipiAttivita: initialTipi }: Attivi
     }
   }, [from, to, filterCommittente])
 
-  useEffect(() => { caricaAttivita() }, [caricaAttivita])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { caricaAttivita() }, [from, to, filterCommittente])
 
   function apriNuova() {
     setEditId(undefined)
