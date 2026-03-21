@@ -3,10 +3,11 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { signOut } from 'next-auth/react'
-import { CalendarDays, Building2, Users, Tag, FolderOpen, FileText, LogOut, ListChecks } from 'lucide-react'
+import { CalendarDays, Building2, Users, Tag, FolderOpen, FileText, LogOut, ListChecks, LayoutDashboard } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 const nav = [
+  { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/calendario', label: 'Calendario', icon: CalendarDays },
   { href: '/attivita', label: 'Attività', icon: ListChecks },
   { href: '/anagrafica/committenti', label: 'Committenti', icon: Building2 },
