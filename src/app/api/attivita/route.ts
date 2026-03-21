@@ -110,8 +110,10 @@ export async function GET(req: NextRequest) {
 
   const attivita = await prisma.attivita.findMany({
     where: {
-      ...(from ? { dataAttivita: { gte: new Date(from) } } : {}),
-      ...(to ? { dataAttivita: { lte: new Date(to) } } : {}),
+      dataAttivita: {
+        ...(from ? { gte: new Date(from) } : {}),
+        ...(to ? { lte: new Date(to) } : {}),
+      },
       ...(committenteId ? { committenteId: parseInt(committenteId) } : {}),
     },
     include: includeRelations,

@@ -206,7 +206,7 @@ export default function ClientiTable({
 
   return (
     <>
-      <div className="p-2">
+      <div className="px-2 py-1">
         <div className="flex items-center justify-between mb-2">
           <div>
             <h1 className="text-xl font-bold">Clienti</h1>
@@ -255,37 +255,37 @@ export default function ClientiTable({
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b bg-muted/50">
-                  <th className="text-left px-3 py-1 font-medium">Ragione sociale</th>
-                  <th className="text-left px-3 py-1 font-medium hidden md:table-cell">Committente</th>
-                  <th className="text-left px-3 py-1 font-medium hidden lg:table-cell">Indirizzo</th>
-                  <th className="text-right px-3 py-1 font-medium hidden lg:table-cell">Km A/R</th>
-                  <th className="text-center px-3 py-1 font-medium hidden md:table-cell">Attività</th>
-                  <th className="text-center px-3 py-1 font-medium">Attivo</th>
-                  <th className="px-3 py-1 w-20" />
+                  <th className="text-left px-3 py-0.5 font-medium">Ragione sociale</th>
+                  <th className="text-left px-3 py-0.5 font-medium hidden md:table-cell">Committente</th>
+                  <th className="text-left px-3 py-0.5 font-medium hidden lg:table-cell">Indirizzo</th>
+                  <th className="text-right px-3 py-0.5 font-medium hidden lg:table-cell">Km A/R</th>
+                  <th className="text-center px-3 py-0.5 font-medium hidden md:table-cell">Attività</th>
+                  <th className="text-center px-3 py-0.5 font-medium">Attivo</th>
+                  <th className="px-3 py-0.5 w-20" />
                 </tr>
               </thead>
               <tbody>
                 {filtered.map((c) => (
                   <tr key={c.id} className="border-b last:border-0 hover:bg-muted/30 transition-colors">
-                    <td className="px-3 py-1 font-medium">{c.ragioneSociale}</td>
-                    <td className="px-3 py-1 text-muted-foreground hidden md:table-cell">
+                    <td className="px-3 py-0.5 font-medium">{c.ragioneSociale}</td>
+                    <td className="px-3 py-0.5 text-muted-foreground hidden md:table-cell">
                       {c.committente.ragioneSociale}
                     </td>
-                    <td className="px-3 py-1 text-muted-foreground hidden lg:table-cell max-w-xs truncate">
+                    <td className="px-3 py-0.5 text-muted-foreground hidden lg:table-cell max-w-xs truncate">
                       {c.indirizzo ?? '—'}
                     </td>
-                    <td className="px-3 py-1 text-right tabular-nums hidden lg:table-cell">
+                    <td className="px-3 py-0.5 text-right tabular-nums hidden lg:table-cell">
                       {c.kmTrasferta != null ? `${c.kmTrasferta} km` : '—'}
                     </td>
-                    <td className="px-3 py-1 text-center hidden md:table-cell">
+                    <td className="px-3 py-0.5 text-center hidden md:table-cell">
                       <Badge variant="secondary">{c._count.attivita}</Badge>
                     </td>
-                    <td className="px-3 py-1 text-center">
+                    <td className="px-3 py-0.5 text-center">
                       {c.attivo
                         ? <CheckCircle2 className="h-4 w-4 text-green-500 mx-auto" />
                         : <XCircle className="h-4 w-4 text-muted-foreground mx-auto" />}
                     </td>
-                    <td className="px-3 py-1">
+                    <td className="px-3 py-0.5">
                       <div className="flex justify-end gap-1">
                         <Button variant="ghost" size="icon" onClick={() => openEdit(c)}>
                           <Pencil className="h-4 w-4" />

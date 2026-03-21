@@ -112,6 +112,7 @@ export function AttivitaForm({
   const [activeEventId, setActiveEventId] = useState<string | undefined>(eventId)
   // Prevents the auto-fetch from overwriting the price loaded from a saved activity
   const skipNextPrezzoFetch = useRef(false)
+  const dateInputRef = useRef<HTMLInputElement>(null)
 
   const today = new Date().toISOString().split('T')[0]
 
@@ -368,6 +369,7 @@ export function AttivitaForm({
       fatturabile: true,
     })
     onNuova?.()
+    setTimeout(() => dateInputRef.current?.focus(), 0)
   }
 
   async function handleDelete() {
@@ -407,7 +409,16 @@ export function AttivitaForm({
       <div className="grid grid-cols-2 gap-2">
         <div className="space-y-0.5">
           <Label htmlFor="dataAttivita">Data</Label>
-          <Input id="dataAttivita" type="date" {...register('dataAttivita')} autoFocus={!eventId} />
+          <Input
+            id="dataAttivita"
+            type="date"
+            {...register('dataAttivita')}
+            ref={(el) => {
+              register('dataAttivita').ref(el)
+              dateInputRef.current = el
+            }}
+            autoFocus={!eventId}
+          />
           {errors.dataAttivita && <p className="text-xs text-destructive">{errors.dataAttivita.message}</p>}
         </div>
         <div className="space-y-0.5">
