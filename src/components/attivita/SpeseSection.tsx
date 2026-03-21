@@ -77,7 +77,10 @@ export function SpeseSection({
 
   // Load existing spese
   useEffect(() => {
-    if (!attivitaId) return
+    if (!attivitaId) {
+      setSpese([])
+      return
+    }
     setLoading(true)
     fetch(`/api/spese?attivita_id=${attivitaId}`)
       .then((r) => r.json())
