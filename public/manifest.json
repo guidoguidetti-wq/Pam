@@ -2,7 +2,7 @@
   "name": "PAM — Personal Activity Manager",
   "short_name": "PAM",
   "description": "Gestione attività, fatturazione e spese",
-  "start_url": "/calendario",
+  "start_url": "/dashboard",
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#0f172a",
