@@ -407,7 +407,7 @@ export function AttivitaForm({
       <div className="grid grid-cols-2 gap-2">
         <div className="space-y-0.5">
           <Label htmlFor="dataAttivita">Data</Label>
-          <Input id="dataAttivita" type="date" {...register('dataAttivita')} />
+          <Input id="dataAttivita" type="date" {...register('dataAttivita')} autoFocus={!eventId} />
           {errors.dataAttivita && <p className="text-xs text-destructive">{errors.dataAttivita.message}</p>}
         </div>
         <div className="space-y-0.5">

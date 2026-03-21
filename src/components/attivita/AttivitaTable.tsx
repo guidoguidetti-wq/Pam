@@ -20,7 +20,7 @@ import {
 import { TipiAttivitaDialog } from './TipiAttivitaDialog'
 import { AttivitaForm } from './AttivitaForm'
 import { cn, formatOre, calcolaDurata, coloreCommittente, formatValuta } from '@/lib/utils'
-import { Plus, Settings2, Pencil, Loader2, Trash2, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react'
+import { Plus, Settings2, Pencil, Loader2, Trash2, ArrowUpDown, ArrowUp, ArrowDown, X } from 'lucide-react'
 
 const TIPO_COLORS: Record<string, string> = {
   COM: 'bg-blue-100 text-blue-700',
@@ -67,24 +67,27 @@ function fineAnno(): string {
   return `${new Date().getFullYear()}-12-31`
 }
 
-export function AttivitaTable({ committenti, tipiAttivita: initialTipi }: AttivitaTableProps) {
+export function AttivitaTable({ committenti: _committenti, tipiAttivita: initialTipi }: AttivitaTableProps) {
   const [tipiAttivita, setTipiAttivita] = useState(initialTipi)
   const [attivita, setAttivita] = useState<AttivitaRow[]>([])
   const [loading, setLoading] = useState(false)
   const [from, setFrom] = useState(primoGiornoAnno())
   const [to, setTo] = useState(fineAnno())
-  const [filterCommittente, setFilterCommittente] = useState('')
   const [tipiDialogOpen, setTipiDialogOpen] = useState(false)
   const [formDialogOpen, setFormDialogOpen] = useState(false)
   const [editId, setEditId] = useState<string | undefined>(undefined)
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
 
+  // Filtri colonna (client-side)
+  const [fCommittente, setFCommittente] = useState('')
+  const [fProgetto, setFProgetto] = useState('')
+  const [fTipo, setFTipo] = useState('')
+
   const caricaAttivita = useCallback(async () => {
     setLoading(true)
     try {
       const params = new URLSearchParams({ from, to })
-      if (filterCommittente) params.set('committente_id', filterCommittente)
       const res = await fetch(`/api/attivita?${params}`)
       if (!res.ok) { toast.error('Errore caricamento attività'); return }
       const data: AttivitaRow[] = await res.json()
@@ -92,10 +95,9 @@ export function AttivitaTable({ committenti, tipiAttivita: initialTipi }: Attivi
     } finally {
       setLoading(false)
     }
-  }, [from, to, filterCommittente])
+  }, [from, to])
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { caricaAttivita() }, [from, to, filterCommittente])
+  useEffect(() => { caricaAttivita() }, [caricaAttivita])
 
   function apriNuova() {
     setEditId(undefined)
@@ -107,23 +109,10 @@ export function AttivitaTable({ committenti, tipiAttivita: initialTipi }: Attivi
     setFormDialogOpen(true)
   }
 
-  function onSaved() {
-    caricaAttivita()
-  }
-
-  function onClose() {
-    setFormDialogOpen(false)
-    caricaAttivita()
-  }
-
-  function onNuova() {
-    setEditId(undefined)
-  }
-
-  function onDeleted() {
-    setFormDialogOpen(false)
-    caricaAttivita()
-  }
+  function onSaved() { caricaAttivita() }
+  function onClose() { setFormDialogOpen(false); caricaAttivita() }
+  function onNuova() { setEditId(undefined) }
+  function onDeleted() { setFormDialogOpen(false); caricaAttivita() }
 
   async function handleDeleteRow(id: string) {
     if (!confirm('Eliminare questa attività?')) return
@@ -138,21 +127,37 @@ export function AttivitaTable({ committenti, tipiAttivita: initialTipi }: Attivi
     }
   }
 
+  // Ordinamento
   const attivitaOrdinata = [...attivita].sort((a, b) => {
     const cmp = a.dataAttivita.localeCompare(b.dataAttivita)
     return sortDir === 'asc' ? cmp : -cmp
   })
 
-  const totaleOreMin = attivita.reduce((acc, row) => {
-    return acc + (row.oreErogate ?? calcolaDurata(row.oraInizio, row.oraFine))
-  }, 0)
-  const totaleValore = attivita.reduce((acc, row) => acc + (row.valoreAttivita ?? 0), 0)
-  const totaleSpese = attivita.reduce((acc, row) => acc + (row.totaleSpese ?? 0), 0)
+  // Filtri colonna client-side
+  const attivitaFiltrata = attivitaOrdinata.filter(row => {
+    if (fCommittente) {
+      const q = fCommittente.toLowerCase()
+      const matchComm = row.committente.ragioneSociale.toLowerCase().includes(q)
+      const matchCliente = row.cliente?.ragioneSociale.toLowerCase().includes(q) ?? false
+      if (!matchComm && !matchCliente) return false
+    }
+    if (fProgetto && !row.progetto?.nome.toLowerCase().includes(fProgetto.toLowerCase())) return false
+    if (fTipo && row.tipoAttivita.codice !== fTipo) return false
+    return true
+  })
+
+  const hasColFilter = fCommittente || fProgetto || fTipo
+
+  // Totali sulla lista filtrata
+  const totaleOreMin = attivitaFiltrata.reduce((acc, row) =>
+    acc + (row.oreErogate ?? calcolaDurata(row.oraInizio, row.oraFine)), 0)
+  const totaleValore = attivitaFiltrata.reduce((acc, row) => acc + (row.valoreAttivita ?? 0), 0)
+  const totaleSpese = attivitaFiltrata.reduce((acc, row) => acc + (row.totaleSpese ?? 0), 0)
   const totaleGenerale = totaleValore + totaleSpese
 
   return (
     <div className="space-y-4">
-      {/* Filter bar */}
+      {/* Barra filtri data */}
       <div className="flex flex-wrap gap-2 items-end">
         <div className="space-y-1">
           <label className="text-xs text-muted-foreground">Dal</label>
@@ -162,32 +167,14 @@ export function AttivitaTable({ committenti, tipiAttivita: initialTipi }: Attivi
           <label className="text-xs text-muted-foreground">Al</label>
           <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="h-8 w-36" />
         </div>
-        <div className="space-y-1">
-          <label className="text-xs text-muted-foreground">Committente</label>
-          <Select
-            value={filterCommittente || '__all__'}
-            onValueChange={(v) => setFilterCommittente(v === '__all__' ? '' : v)}
-          >
-            <SelectTrigger className="h-8 w-44">
-              <SelectValue placeholder="Tutti" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="__all__">Tutti</SelectItem>
-              {committenti.map((c) => (
-                <SelectItem key={c.id} value={String(c.id)}>
-                  {c.ragioneSociale}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
 
         <div className="flex gap-2 ml-auto">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setTipiDialogOpen(true)}
-          >
+          {hasColFilter && (
+            <Button variant="outline" size="sm" onClick={() => { setFCommittente(''); setFProgetto(''); setFTipo('') }}>
+              <X className="h-3.5 w-3.5 mr-1" /> Reset filtri
+            </Button>
+          )}
+          <Button variant="outline" size="sm" onClick={() => setTipiDialogOpen(true)}>
             <Settings2 className="h-4 w-4 mr-1" /> Gestisci tipi
           </Button>
           <Button size="sm" onClick={apriNuova}>
@@ -196,14 +183,17 @@ export function AttivitaTable({ committenti, tipiAttivita: initialTipi }: Attivi
         </div>
       </div>
 
-      {/* Totali selezione */}
+      {/* Totali */}
       {!loading && attivita.length > 0 && (
         <div className="flex gap-4 text-sm px-1">
           <span className="text-muted-foreground">
-            <span className="font-medium text-foreground">{attivita.length}</span> attività
+            <span className="font-medium text-foreground">{attivitaFiltrata.length}</span>
+            {attivitaFiltrata.length !== attivita.length && (
+              <span className="text-muted-foreground"> / {attivita.length}</span>
+            )}{' '}attività
           </span>
           <span className="text-muted-foreground">
-            Ore erogate: <span className="font-medium text-foreground tabular-nums">{formatOre(totaleOreMin)}</span>
+            Ore: <span className="font-medium text-foreground tabular-nums">{formatOre(totaleOreMin)}</span>
           </span>
           <span className="text-muted-foreground">
             Competenze: <span className="font-medium text-foreground tabular-nums">{formatValuta(totaleValore)}</span>
@@ -230,6 +220,7 @@ export function AttivitaTable({ committenti, tipiAttivita: initialTipi }: Attivi
         <div className="overflow-x-auto rounded-md border">
           <table className="w-full text-sm">
             <thead className="bg-muted/50">
+              {/* Intestazioni colonne */}
               <tr>
                 <th className="text-left px-3 py-1 font-medium">
                   <button
@@ -237,13 +228,7 @@ export function AttivitaTable({ committenti, tipiAttivita: initialTipi }: Attivi
                     className="flex items-center gap-1 hover:text-foreground text-foreground"
                   >
                     Data
-                    {sortDir === 'asc' ? (
-                      <ArrowUp className="h-3 w-3" />
-                    ) : sortDir === 'desc' ? (
-                      <ArrowDown className="h-3 w-3" />
-                    ) : (
-                      <ArrowUpDown className="h-3 w-3 opacity-40" />
-                    )}
+                    {sortDir === 'asc' ? <ArrowUp className="h-3 w-3" /> : sortDir === 'desc' ? <ArrowDown className="h-3 w-3" /> : <ArrowUpDown className="h-3 w-3 opacity-40" />}
                   </button>
                 </th>
                 <th className="text-left px-3 py-1 font-medium">Ore</th>
@@ -257,9 +242,55 @@ export function AttivitaTable({ committenti, tipiAttivita: initialTipi }: Attivi
                 <th className="text-center px-3 py-1 font-medium hidden lg:table-cell">Spese</th>
                 <th className="px-1 py-1" />
               </tr>
+              {/* Filtri colonna */}
+              <tr className="border-t bg-muted/20">
+                <th className="px-1 py-1" />
+                <th className="px-1 py-1" />
+                <th className="px-1 py-1">
+                  <Input
+                    className="h-6 text-xs px-1.5"
+                    placeholder="Filtra…"
+                    value={fCommittente}
+                    onChange={e => setFCommittente(e.target.value)}
+                  />
+                </th>
+                <th className="px-1 py-1 hidden md:table-cell">
+                  <Input
+                    className="h-6 text-xs px-1.5"
+                    placeholder="Filtra…"
+                    value={fProgetto}
+                    onChange={e => setFProgetto(e.target.value)}
+                  />
+                </th>
+                <th className="px-1 py-1">
+                  <Select value={fTipo || '__all__'} onValueChange={v => setFTipo(v === '__all__' ? '' : v)}>
+                    <SelectTrigger className="h-6 text-xs px-1.5 w-full">
+                      <SelectValue placeholder="Tutti" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__all__">Tutti</SelectItem>
+                      {tipiAttivita.map(t => (
+                        <SelectItem key={t.id} value={t.codice}>{t.codice}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </th>
+                <th className="px-1 py-1 hidden md:table-cell" />
+                <th className="px-1 py-1 hidden lg:table-cell" />
+                <th className="px-1 py-1 hidden lg:table-cell" />
+                <th className="px-1 py-1" />
+                <th className="px-1 py-1 hidden lg:table-cell" />
+                <th className="px-1 py-1" />
+              </tr>
             </thead>
             <tbody>
-              {attivitaOrdinata.map((row) => {
+              {attivitaFiltrata.length === 0 ? (
+                <tr>
+                  <td colSpan={11} className="text-center text-muted-foreground py-6 text-sm">
+                    Nessuna attività corrisponde ai filtri
+                  </td>
+                </tr>
+              ) : attivitaFiltrata.map((row) => {
                 const durata = row.oreErogate ?? calcolaDurata(row.oraInizio, row.oraFine)
                 const colore = coloreCommittente(row.committenteId)
                 return (
@@ -299,37 +330,22 @@ export function AttivitaTable({ committenti, tipiAttivita: initialTipi }: Attivi
                       {row.valoreAttivita != null ? formatValuta(row.valoreAttivita) : '—'}
                     </td>
                     <td className="px-3 py-1 text-center">
-                      {row.fatturabile ? (
-                        <span className="text-green-600 text-xs">✓</span>
-                      ) : (
-                        <span className="text-muted-foreground text-xs">—</span>
-                      )}
+                      {row.fatturabile ? <span className="text-green-600 text-xs">✓</span> : <span className="text-muted-foreground text-xs">—</span>}
                     </td>
                     <td className="px-3 py-1 text-center hidden lg:table-cell">
-                      {row.totaleSpese > 0 && (
-                        <span className="text-blue-600 text-xs font-medium">✓</span>
-                      )}
+                      {row.totaleSpese > 0 && <span className="text-blue-600 text-xs font-medium">✓</span>}
                     </td>
                     <td className="px-1 py-1">
                       <div className="flex items-center gap-0.5">
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className="h-6 w-6 p-0"
-                          onClick={() => apriModifica(row.id)}
-                        >
+                        <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={() => apriModifica(row.id)}>
                           <Pencil className="h-3 w-3" />
                         </Button>
                         <Button
-                          size="sm"
-                          variant="ghost"
-                          className="h-6 w-6 p-0 text-destructive hover:text-destructive"
+                          size="sm" variant="ghost" className="h-6 w-6 p-0 text-destructive hover:text-destructive"
                           disabled={deletingId === row.id}
                           onClick={() => handleDeleteRow(row.id)}
                         >
-                          {deletingId === row.id
-                            ? <Loader2 className="h-3 w-3 animate-spin" />
-                            : <Trash2 className="h-3 w-3" />}
+                          {deletingId === row.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />}
                         </Button>
                       </div>
                     </td>
@@ -349,7 +365,7 @@ export function AttivitaTable({ committenti, tipiAttivita: initialTipi }: Attivi
           </DialogHeader>
           {formDialogOpen && (
             <AttivitaForm
-              committenti={committenti}
+              committenti={_committenti}
               tipiAttivita={tipiAttivita.filter((t) => t.attivo)}
               eventId={editId}
               onSaved={onSaved}
