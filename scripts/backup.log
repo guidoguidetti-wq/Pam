@@ -1,0 +1,13 @@
+﻿[2026-04-01 14:13:50] [INFO] Lettura configurazione da: C:\PROGETTI_WEB\PAM\PAM_WEB\.env.local
+[2026-04-01 14:13:52] [ERROR] pg_dump non trovato. Installa PostgreSQL client tools e aggiungilo al PATH.
+[2026-04-01 14:16:51] [INFO] Lettura configurazione da: C:\PROGETTI_WEB\PAM\PAM_WEB\.env.local
+[2026-04-01 14:16:51] [ERROR] pg_dump non trovato. Installa PostgreSQL client tools e aggiungilo al PATH.
+[2026-04-01 15:16:45] [INFO] Lettura configurazione da: C:\PROGETTI_WEB\PAM\PAM_WEB\.env.local
+[2026-04-01 15:16:45] [ERROR] pg_dump non trovato. Installa PostgreSQL client tools e aggiungilo al PATH.
+[2026-04-01 13:19:00] [INFO] === Avvio backup PAM ===
+[2026-04-01 13:19:00] [INFO] Configurazione da: C:\PROGETTI_WEB\PAM\PAM_WEB\.env.local
+[2026-04-01 13:19:00] [INFO] Connessione al database...
+[2026-04-01 13:19:01] [INFO] Record letti: {"tipiAttivita":6,"committenti":5,"clienti":10,"listino":7,"progetti":5,"progettoStime":5,"attivita":59,"spese":20,"allegati":8}
+[2026-04-01 13:19:01] [INFO] Backup salvato: C:\PROGETTI_WEB\PAM\PAM_WEB\scripts\backups\pam_2026-04-01T13-19-01.json.gz (0.01 MB)
+[2026-04-01 13:19:01] [INFO] Backup totali conservati: 1
+[2026-04-01 13:19:01] [INFO] === Backup completato ===
