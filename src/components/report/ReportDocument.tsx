@@ -337,6 +337,15 @@ function SpeseSection({ clienti }: { clienti: ReportCliente[] }) {
   if (allSpese.length === 0) return null
 
   const totale = allSpese.reduce((sum, s) => sum + s.importoTotale, 0)
+
+  // Totali per tipo di spesa (solo tipi presenti)
+  const totaliPerTipo: { tipo: string; label: string; importo: number }[] = Object.entries(
+    allSpese.reduce<Record<string, number>>((acc, s) => {
+      acc[s.tipoSpesa] = (acc[s.tipoSpesa] ?? 0) + s.importoTotale
+      return acc
+    }, {})
+  ).map(([tipo, importo]) => ({ tipo, label: SPESA_LABELS[tipo] ?? tipo, importo }))
+
   const allegatiImg: AllegatoExt[] = allSpese.flatMap(s =>
     s.allegati
       .filter(a => a.tipoMime?.startsWith('image/') && a.storageUrl)
@@ -373,9 +382,14 @@ function SpeseSection({ clienti }: { clienti: ReportCliente[] }) {
         </View>
       ))}
 
-      <View style={[S.totaliRow, { marginTop: 4 }]}>
-        <Text style={[S.totaleLbl, { flex: 1 }]}> </Text>
-        <View style={S.totaleItem}>
+      <View style={[S.totaliRow, { marginTop: 4, flexWrap: 'wrap', gap: 12 }]}>
+        {totaliPerTipo.map(t => (
+          <View key={t.tipo} style={S.totaleItem}>
+            <Text style={S.totaleLbl}>{t.label}</Text>
+            <Text style={[S.totaleVal, { color: MUTED }]}>{fmtEur(t.importo)}</Text>
+          </View>
+        ))}
+        <View style={[S.totaleItem, { borderLeftWidth: 1, borderLeftColor: BORDER, borderLeftStyle: 'solid', paddingLeft: 12 }]}>
           <Text style={S.totaleLbl}>Totale spese</Text>
           <Text style={S.totaleVal}>{fmtEur(totale)}</Text>
         </View>
