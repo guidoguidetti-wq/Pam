@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { toast } from 'sonner'
-import { Plus, Trash2, Loader2, Paperclip, X } from 'lucide-react'
+import { Plus, Trash2, Loader2, Paperclip, X, Pencil } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -58,6 +58,7 @@ export function SpeseSection({
   const [spese, setSpese] = useState<SpesaRow[]>([])
   const [loading, setLoading] = useState(false)
   const [adding, setAdding] = useState(false)
+  const [editingId, setEditingId] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [uploadingId, setUploadingId] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -132,6 +133,20 @@ export function SpeseSection({
     setImportoTotale('')
     setDataSpesa(dataAttivita)
     setRimborso(true)
+    setEditingId(null)
+    setAdding(true)
+  }
+
+  function openEditForm(s: SpesaRow) {
+    kmUserEdited.current = true
+    setTipo(s.tipoSpesa)
+    setDescrizione(s.descrizione ?? '')
+    setQuantita(s.quantita != null ? String(s.quantita) : '')
+    setImportoUnitario(s.importoUnitario != null ? String(s.importoUnitario) : '')
+    setImportoTotale(String(s.importoTotale))
+    setDataSpesa(s.dataSpesa)
+    setRimborso(s.rimborsoRichiesto)
+    setEditingId(s.id)
     setAdding(true)
   }
 
@@ -159,30 +174,46 @@ export function SpeseSection({
     setSaving(true)
     try {
       const body: Record<string, unknown> = {
-        attivitaId,
         tipoSpesa: tipo,
         descrizione: descrizione.trim() || null,
         importoTotale: totale,
         dataSpesa,
         rimborsoRichiesto: rimborso,
-        valuta: 'EUR',
       }
       if (tipo === 'KM') {
         const q = parseFloat(quantita)
         const u = parseFloat(importoUnitario)
         body.quantita = !isNaN(q) ? q : null
         body.importoUnitario = !isNaN(u) ? u : null
+      } else {
+        body.quantita = null
+        body.importoUnitario = null
       }
-      const res = await fetch('/api/spese', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      })
-      if (!res.ok) throw new Error((await res.json()).error)
-      const saved: SpesaRow = await res.json()
-      setSpese((prev) => [...prev, saved])
-      toast.success('Spesa aggiunta')
+
+      if (editingId) {
+        const res = await fetch(`/api/spese/${editingId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        })
+        if (!res.ok) throw new Error((await res.json()).error)
+        const updated: SpesaRow = await res.json()
+        setSpese((prev) => prev.map((s) => (s.id === editingId ? updated : s)))
+        toast.success('Spesa aggiornata')
+      } else {
+        const res = await fetch('/api/spese', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ...body, attivitaId, valuta: 'EUR' }),
+        })
+        if (!res.ok) throw new Error((await res.json()).error)
+        const saved: SpesaRow = await res.json()
+        setSpese((prev) => [...prev, saved])
+        toast.success('Spesa aggiunta')
+      }
+
       setAdding(false)
+      setEditingId(null)
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Errore')
     } finally {
@@ -291,6 +322,14 @@ export function SpeseSection({
               )}
             </div>
             <div className="flex gap-1 shrink-0">
+              <button
+                type="button"
+                onClick={() => openEditForm(s)}
+                className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground"
+                title="Modifica spesa"
+              >
+                <Pencil className="h-3.5 w-3.5" />
+              </button>
               <button
                 type="button"
                 onClick={() => openFileUpload(s.id)}
@@ -475,9 +514,9 @@ export function SpeseSection({
               className="flex-1"
             >
               {saving && <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />}
-              Salva spesa
+              {editingId ? 'Aggiorna spesa' : 'Salva spesa'}
             </Button>
-            <Button type="button" size="sm" variant="outline" onClick={() => setAdding(false)}>
+            <Button type="button" size="sm" variant="outline" onClick={() => { setAdding(false); setEditingId(null) }}>
               Annulla
             </Button>
           </div>
