@@ -55,8 +55,10 @@ export default function SidebarBackup() {
       const a = document.createElement('a')
       a.href = url
       a.download = downloadName
+      document.body.appendChild(a)
       a.click()
-      URL.revokeObjectURL(url)
+      document.body.removeChild(a)
+      setTimeout(() => URL.revokeObjectURL(url), 1000)
 
       // Aggiorna stato sidebar
       load()
