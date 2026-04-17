@@ -11,13 +11,17 @@ export default async function DashboardPage() {
   const session = await auth()
   if (!session) redirect('/login')
 
-  const lastBackup = await prisma.backupLog.findFirst({
-    orderBy: { createdAt: 'desc' },
-  })
-
-  const lastBackupSerialized = lastBackup
-    ? { ...lastBackup, createdAt: lastBackup.createdAt.toISOString() }
-    : null
+  let lastBackupSerialized = null
+  try {
+    const lastBackup = await prisma.backupLog.findFirst({
+      orderBy: { createdAt: 'desc' },
+    })
+    if (lastBackup) {
+      lastBackupSerialized = { ...lastBackup, createdAt: lastBackup.createdAt.toISOString() }
+    }
+  } catch {
+    // tabella backup_log non ancora creata (migration pending)
+  }
 
   return (
     <AppLayout>
