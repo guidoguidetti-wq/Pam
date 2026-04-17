@@ -214,6 +214,20 @@ model Spesa {
   @@map("spesa")
 }
 
+// ─── BACKUP LOG ────────────────────────────────────────────
+
+model BackupLog {
+  id             Int      @id @default(autoincrement())
+  filename       String   @db.VarChar(255)
+  filePath       String?  @db.VarChar(500) @map("file_path")
+  fileSizeBytes  Int?     @map("file_size_bytes")
+  status         String   @default("success") @db.VarChar(20)
+  errorMessage   String?  @db.Text @map("error_message")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  @@map("backup_log")
+}
+
 // ─── ALLEGATI ──────────────────────────────────────────────
 
 model Allegato {
