@@ -55,6 +55,7 @@ export async function GET(req: NextRequest) {
 
   // ── Progetti con ore stimate e erogate ──────────────────────────────────
   const progetti = await prisma.progetto.findMany({
+    where: { attivo: true },
     orderBy: [
       { dataInizio: { sort: 'desc', nulls: 'last' } },
       { createdAt: 'desc' },

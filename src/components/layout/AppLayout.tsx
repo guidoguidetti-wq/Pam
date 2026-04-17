@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation'
 import { signOut } from 'next-auth/react'
 import { CalendarDays, Building2, Users, Tag, FolderOpen, FileText, LogOut, ListChecks, LayoutDashboard } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import SidebarBackup from '@/components/layout/SidebarBackup'
 
 const nav = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -46,6 +47,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             </Link>
           ))}
         </nav>
+
+        <SidebarBackup />
 
         <div className="p-2 border-t">
           <button
