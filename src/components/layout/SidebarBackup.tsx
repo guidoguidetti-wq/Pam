@@ -40,10 +40,27 @@ export default function SidebarBackup() {
     setRunning(true)
     try {
       const res = await fetch('/api/backup', { method: 'POST' })
-      const data = await res.json()
-      if (!res.ok) { toast.error(data.error ?? 'Errore backup'); return }
-      setLast(data)
-      toast.success('Backup completato')
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        toast.error(data.error ?? 'Errore backup')
+        return
+      }
+
+      // Scarica il file nel browser
+      const blob = await res.blob()
+      const disposition = res.headers.get('Content-Disposition') ?? ''
+      const nameMatch = disposition.match(/filename="([^"]+)"/)
+      const downloadName = nameMatch?.[1] ?? 'pam_backup.json'
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = downloadName
+      a.click()
+      URL.revokeObjectURL(url)
+
+      // Aggiorna stato sidebar
+      load()
+      toast.success('Backup scaricato', { description: downloadName })
     } catch {
       toast.error('Errore di rete')
     } finally {
