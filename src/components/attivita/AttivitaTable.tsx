@@ -20,7 +20,8 @@ import {
 import { TipiAttivitaDialog } from './TipiAttivitaDialog'
 import { AttivitaForm } from './AttivitaForm'
 import { cn, formatOre, calcolaDurata, coloreCommittente, formatValuta } from '@/lib/utils'
-import { Plus, Settings2, Pencil, Loader2, Trash2, ArrowUpDown, ArrowUp, ArrowDown, X } from 'lucide-react'
+import { Plus, Settings2, Pencil, Loader2, Trash2, ArrowUpDown, ArrowUp, ArrowDown, X, Download } from 'lucide-react'
+import * as XLSX from 'xlsx'
 
 const TIPO_COLORS: Record<string, string> = {
   COM: 'bg-blue-100 text-blue-700',
@@ -114,6 +115,35 @@ export function AttivitaTable({ committenti: _committenti, tipiAttivita: initial
   function onNuova() { setEditId(undefined) }
   function onDeleted() { setFormDialogOpen(false); caricaAttivita() }
 
+  function esportaExcel() {
+    const rows = attivitaFiltrata.map(row => {
+      const durata = row.oreErogate ?? calcolaDurata(row.oraInizio, row.oraFine)
+      return {
+        Data: new Date(row.dataAttivita + 'T00:00:00').toLocaleDateString('it-IT'),
+        'Ora inizio': row.oraInizio,
+        'Ora fine': row.oraFine,
+        Ore: parseFloat((durata / 60).toFixed(2)),
+        Committente: row.committente.ragioneSociale,
+        Cliente: row.cliente?.ragioneSociale ?? '',
+        Progetto: row.progetto?.nome ?? '',
+        Tipo: row.tipoAttivita.codice,
+        Descrizione: row.descrizione ?? '',
+        Fatturabile: row.fatturabile ? 'Sì' : 'No',
+        '€/h': row.prezzoUnitario ?? '',
+        'Valore €': row.valoreAttivita ?? '',
+        'Spese €': row.totaleSpese > 0 ? row.totaleSpese : '',
+      }
+    })
+
+    const ws = XLSX.utils.json_to_sheet(rows)
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, 'Attività')
+
+    const fromLabel = from.replace(/-/g, '')
+    const toLabel = to.replace(/-/g, '')
+    XLSX.writeFile(wb, `attivita-${fromLabel}-${toLabel}.xlsx`)
+  }
+
   async function handleDeleteRow(id: string) {
     if (!confirm('Eliminare questa attività?')) return
     setDeletingId(id)
@@ -172,6 +202,11 @@ export function AttivitaTable({ committenti: _committenti, tipiAttivita: initial
           {hasColFilter && (
             <Button variant="outline" size="sm" onClick={() => { setFCommittente(''); setFProgetto(''); setFTipo('') }}>
               <X className="h-3.5 w-3.5 mr-1" /> Reset filtri
+            </Button>
+          )}
+          {attivitaFiltrata.length > 0 && (
+            <Button variant="outline" size="sm" onClick={esportaExcel}>
+              <Download className="h-4 w-4 mr-1" /> Esporta
             </Button>
           )}
           <Button variant="outline" size="sm" onClick={() => setTipiDialogOpen(true)}>

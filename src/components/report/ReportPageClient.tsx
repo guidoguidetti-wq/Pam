@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -16,6 +16,11 @@ import { Switch } from '@/components/ui/switch'
 import { FileDown, Loader2 } from 'lucide-react'
 
 interface Committente {
+  id: number
+  ragioneSociale: string
+}
+
+interface Cliente {
   id: number
   ragioneSociale: string
 }
@@ -37,14 +42,33 @@ export function ReportPageClient({ committenti }: ReportPageClientProps) {
   const [from, setFrom] = useState(primoGiornoMese())
   const [to, setTo] = useState(oggiStr())
   const [committenteId, setCommittenteId] = useState('')
+  const [clienteId, setClienteId] = useState('')
+  const [clienti, setClienti] = useState<Cliente[]>([])
+  const [loadingClienti, setLoadingClienti] = useState(false)
   const [includeSpese, setIncludeSpese] = useState(true)
   const [loading, setLoading] = useState(false)
+
+  useEffect(() => {
+    if (!committenteId) {
+      setClienti([])
+      setClienteId('')
+      return
+    }
+    setLoadingClienti(true)
+    setClienteId('')
+    fetch(`/api/clienti?committente_id=${committenteId}`)
+      .then(r => r.ok ? r.json() : [])
+      .then(data => setClienti(data))
+      .catch(() => setClienti([]))
+      .finally(() => setLoadingClienti(false))
+  }, [committenteId])
 
   async function handleGenera() {
     setLoading(true)
     try {
       const params = new URLSearchParams({ from, to, include_spese: includeSpese ? '1' : '0' })
       if (committenteId) params.set('committente_id', committenteId)
+      if (clienteId) params.set('cliente_id', clienteId)
 
       const res = await fetch(`/api/report?${params}`)
 
@@ -117,6 +141,29 @@ export function ReportPageClient({ committenti }: ReportPageClientProps) {
           </SelectContent>
         </Select>
       </div>
+
+      {committenteId && (
+        <div className="space-y-1">
+          <Label className="text-xs">Cliente</Label>
+          <Select
+            value={clienteId || '__all__'}
+            onValueChange={(v) => setClienteId(v === '__all__' ? '' : v)}
+            disabled={loadingClienti}
+          >
+            <SelectTrigger className="h-9">
+              <SelectValue placeholder={loadingClienti ? 'Caricamento…' : 'Tutti i clienti'} />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__all__">Tutti i clienti</SelectItem>
+              {clienti.map((c) => (
+                <SelectItem key={c.id} value={String(c.id)}>
+                  {c.ragioneSociale}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
 
       <div className="flex items-center gap-3">
         <Switch

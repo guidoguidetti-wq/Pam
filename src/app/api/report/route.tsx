@@ -15,6 +15,7 @@ export async function GET(req: NextRequest) {
   const from = searchParams.get('from')
   const to = searchParams.get('to')
   const committenteIdParam = searchParams.get('committente_id')
+  const clienteIdParam = searchParams.get('cliente_id')
   const includeSpese = searchParams.get('include_spese') === '1'
 
   if (!from || !to) {
@@ -41,6 +42,7 @@ export async function GET(req: NextRequest) {
         where: {
           dataAttivita: { gte: new Date(from), lte: new Date(to) },
           ...(committenteIdParam ? { committenteId: parseInt(committenteIdParam) } : {}),
+          ...(clienteIdParam ? { clienteId: parseInt(clienteIdParam) } : {}),
         },
         include: {
           tipoAttivita: { select: { descrizione: true } },
