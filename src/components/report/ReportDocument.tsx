@@ -83,6 +83,31 @@ function calcTotali(attivita: ReportAttivita[]) {
   return { oreMin, valFatt, valNonFatt }
 }
 
+function calcTotaliCommittente(clienti: ReportCliente[]) {
+  let oreMin = 0, valFatt = 0, valNonFatt = 0
+  for (const cl of clienti) {
+    const t = calcTotali(cl.attivita)
+    oreMin += t.oreMin
+    valFatt += t.valFatt
+    valNonFatt += t.valNonFatt
+  }
+  return { oreMin, valFatt, valNonFatt }
+}
+
+function calcSpeseTotaliPerTipo(clienti: ReportCliente[]) {
+  const map: Record<string, number> = {}
+  let totale = 0
+  for (const cl of clienti) {
+    for (const a of cl.attivita) {
+      for (const s of a.spese) {
+        map[s.tipoSpesa] = (map[s.tipoSpesa] ?? 0) + s.importoTotale
+        totale += s.importoTotale
+      }
+    }
+  }
+  return { perTipo: map, totale }
+}
+
 const SPESA_LABELS: Record<string, string> = {
   KM: 'Km trasferta',
   AUTOSTRADA: 'Autostrada',
@@ -244,6 +269,48 @@ const S = StyleSheet.create({
   allegatiItem:       { marginRight: 12, marginBottom: 12, width: 250 },
   allegatiImg:        { width: 250 },
   allegatiCaption:    { fontSize: 7, color: MUTED, marginTop: 3 },
+  // Riepilogo committente
+  riepilogoCommittente: {
+    backgroundColor: PRIMARY,
+    padding: 10,
+    marginTop: 14,
+    borderRadius: 3,
+  },
+  riepilogoCommittenteTitle: {
+    fontSize: 8,
+    fontFamily: 'Helvetica-Bold',
+    color: '#7fafd4',
+    marginBottom: 8,
+  },
+  riepilogoRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-end',
+  },
+  riepilogoItem: {
+    alignItems: 'flex-end',
+  },
+  riepilogoLbl: {
+    fontSize: 7,
+    color: '#7fafd4',
+    marginBottom: 1,
+  },
+  riepilogoVal: {
+    fontSize: 10,
+    fontFamily: 'Helvetica-Bold',
+    color: WHITE,
+  },
+  speseRiepilogoRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+    borderTopWidth: 0.5,
+    borderTopColor: SECONDARY,
+    borderTopStyle: 'solid',
+    paddingTop: 8,
+    marginTop: 8,
+    justifyContent: 'space-between',
+  },
   // Footer
   footer: {
     position: 'absolute',
@@ -319,6 +386,58 @@ function TotaliCliente({ attivita }: { attivita: ReportAttivita[] }) {
         <Text style={S.totaleLbl}>Valore Non Fatturabile</Text>
         <Text style={[S.totaleVal, { color: MUTED }]}>{fmtEur(valNonFatt)}</Text>
       </View>
+    </View>
+  )
+}
+
+function TotaliCommittente({ clienti }: { clienti: ReportCliente[] }) {
+  const { oreMin, valFatt, valNonFatt } = calcTotaliCommittente(clienti)
+  const { perTipo, totale: totaleSpese } = calcSpeseTotaliPerTipo(clienti)
+  const tipiSpese = Object.entries(perTipo)
+  const hasSpese = tipiSpese.length > 0
+
+  return (
+    <View style={S.riepilogoCommittente}>
+      <Text style={S.riepilogoCommittenteTitle}>RIEPILOGO COMMITTENTE</Text>
+      <View style={S.riepilogoRow}>
+        <View style={S.riepilogoItem}>
+          <Text style={S.riepilogoLbl}>Ore totali</Text>
+          <Text style={S.riepilogoVal}>{fmtOre(oreMin)}</Text>
+        </View>
+        <View style={S.riepilogoItem}>
+          <Text style={S.riepilogoLbl}>Giorni (base 8h)</Text>
+          <Text style={S.riepilogoVal}>{fmtGiorni(oreMin)}</Text>
+        </View>
+        <View style={S.riepilogoItem}>
+          <Text style={S.riepilogoLbl}>Valore fatturabile</Text>
+          <Text style={[S.riepilogoVal, { color: '#6ee7b7' }]}>{fmtEur(valFatt)}</Text>
+        </View>
+        {valNonFatt > 0 && (
+          <View style={S.riepilogoItem}>
+            <Text style={S.riepilogoLbl}>Non fatturabile</Text>
+            <Text style={[S.riepilogoVal, { color: '#9ca3af' }]}>{fmtEur(valNonFatt)}</Text>
+          </View>
+        )}
+        <View style={[S.riepilogoItem, { borderLeftWidth: 1, borderLeftColor: SECONDARY, borderLeftStyle: 'solid', paddingLeft: 12 }]}>
+          <Text style={S.riepilogoLbl}>Totale competenze</Text>
+          <Text style={S.riepilogoVal}>{fmtEur(valFatt + valNonFatt)}</Text>
+        </View>
+      </View>
+
+      {hasSpese && (
+        <View style={S.speseRiepilogoRow}>
+          {tipiSpese.map(([tipo, importo]) => (
+            <View key={tipo} style={S.riepilogoItem}>
+              <Text style={S.riepilogoLbl}>{SPESA_LABELS[tipo] ?? tipo}</Text>
+              <Text style={[S.riepilogoVal, { color: '#fcd34d', fontSize: 9 }]}>{fmtEur(importo)}</Text>
+            </View>
+          ))}
+          <View style={[S.riepilogoItem, { borderLeftWidth: 1, borderLeftColor: SECONDARY, borderLeftStyle: 'solid', paddingLeft: 12 }]}>
+            <Text style={S.riepilogoLbl}>Totale spese</Text>
+            <Text style={[S.riepilogoVal, { color: '#fcd34d' }]}>{fmtEur(totaleSpese)}</Text>
+          </View>
+        </View>
+      )}
     </View>
   )
 }
@@ -457,6 +576,9 @@ export function ReportDocument({ committenti, from, to, includeSpese }: ReportDo
                 <TotaliCliente attivita={cliente.attivita} />
               </View>
             ))}
+
+            {/* Riepilogo committente */}
+            <TotaliCommittente clienti={c.clienti} />
 
             {/* Spese */}
             {includeSpese && <SpeseSection clienti={c.clienti} />}
