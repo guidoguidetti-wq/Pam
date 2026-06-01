@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { signOut } from 'next-auth/react'
-import { CalendarDays, Building2, Users, Tag, FolderOpen, FileText, LogOut, ListChecks, LayoutDashboard } from 'lucide-react'
+import { CalendarDays, Building2, Users, Tag, FolderOpen, FileText, LogOut, ListChecks, LayoutDashboard, Receipt } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import SidebarBackup from '@/components/layout/SidebarBackup'
 
@@ -16,6 +16,7 @@ const nav = [
   { href: '/anagrafica/listino', label: 'Listino', icon: Tag },
   { href: '/progetti', label: 'Progetti', icon: FolderOpen },
   { href: '/report', label: 'Report', icon: FileText },
+  { href: '/fatture-pagamenti', label: 'Fatture e Pagamenti', icon: Receipt },
 ]
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
