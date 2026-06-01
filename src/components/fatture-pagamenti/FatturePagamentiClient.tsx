@@ -1,84 +1,239 @@
 'use client'
 
 import { useRef, useState } from 'react'
-import { FileText, CreditCard, Upload, X, CheckCircle2 } from 'lucide-react'
+import * as XLSX from 'xlsx'
+import { FileText, CreditCard, Upload, X, CheckCircle2, BarChart3 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
-interface FileState {
-  file: File | null
-  dragging: boolean
+// ─── Types ───────────────────────────────────────────────────────────────────
+
+interface Fattura {
+  numero: string
+  data: string
+  cliente: string
+  totale: number
 }
 
-function UploadZone({
-  label,
-  description,
-  accept,
-  icon: Icon,
-  color,
-  state,
-  onFile,
-  onClear,
-}: {
+interface Movimento {
+  dataOperazione: string
+  descrizione: string
+  entrate: number
+}
+
+type StatoRiconciliazione = 'pagata' | 'importo_diverso' | 'trovata_per_importo' | 'non_pagata'
+
+interface RigaRiconciliazione {
+  fattura: Fattura
+  movimento: Movimento | null
+  tipoMatch: 'numero' | 'importo' | null
+  differenza: number
+  stato: StatoRiconciliazione
+}
+
+// ─── Parsing ─────────────────────────────────────────────────────────────────
+
+function parseImporto(val: unknown): number {
+  if (typeof val === 'number') return val
+  if (!val) return 0
+  // Handle Italian format: "1.418,65 €" → 1418.65
+  const s = String(val)
+    .replace(/[€\s]/g, '')
+    .replace(/\./g, '')   // remove thousands separator
+    .replace(',', '.')    // decimal separator
+  return parseFloat(s) || 0
+}
+
+function parseFatture(ws: XLSX.WorkSheet): Fattura[] {
+  const data = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, defval: '' })
+  if (data.length < 2) return []
+
+  const headers = (data[0] as string[]).map(h => String(h).trim())
+  const idx = {
+    numero: headers.findIndex(h => h === 'Numero'),
+    data:   headers.findIndex(h => h === 'Data'),
+    cliente: headers.findIndex(h => h === 'Cliente'),
+    totale: headers.findIndex(h => h === 'Totale'),
+  }
+
+  if (idx.numero < 0 || idx.totale < 0) return []
+
+  return (data.slice(1) as unknown[][])
+    .filter(row => row[idx.numero] && String(row[idx.numero]).trim())
+    .map(row => ({
+      numero:  String(row[idx.numero]).trim(),
+      data:    String(row[idx.data]).trim(),
+      cliente: String(row[idx.cliente]).trim(),
+      totale:  parseImporto(row[idx.totale]),
+    }))
+}
+
+function parseMovimenti(ws: XLSX.WorkSheet): Movimento[] {
+  const data = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, defval: '' })
+
+  // Find header row dynamically (look for "Data operazione")
+  let headerIdx = -1
+  for (let i = 0; i < data.length; i++) {
+    if ((data[i] as unknown[]).some(c => String(c).trim() === 'Data operazione')) {
+      headerIdx = i
+      break
+    }
+  }
+  if (headerIdx < 0) return []
+
+  const headers = (data[headerIdx] as string[]).map(h => String(h).trim())
+  const idx = {
+    dataOp: headers.findIndex(h => h === 'Data operazione'),
+    desc:   headers.findIndex(h => h === 'Descrizione'),
+    entrate: headers.findIndex(h => h === 'Entrate'),
+  }
+
+  return (data.slice(headerIdx + 1) as unknown[][])
+    .filter(row => row[idx.dataOp] && String(row[idx.dataOp]).trim())
+    .map(row => ({
+      dataOperazione: String(row[idx.dataOp]).trim(),
+      descrizione:    String(row[idx.desc]).trim(),
+      entrate:        parseImporto(row[idx.entrate]),
+    }))
+    .filter(m => m.entrate > 0)
+}
+
+// ─── Reconciliation ───────────────────────────────────────────────────────────
+
+function matchInDescription(desc: string, numero: string): boolean {
+  // Direct substring: "10/001" found in "Fat 10/001/26 ..."
+  if (desc.toLowerCase().includes(numero.toLowerCase())) return true
+
+  // Base number (first segment) with Italian invoice wording
+  // e.g. "N. 6", "ft 6", "ft. 6", "fat 6", "ft 06"
+  const base = numero.split('/')[0].replace(/^0+/, '') || numero
+  return new RegExp(`\\b(n\\.?\\s*|ft\\.?\\s*|fat\\s+)0*${base}\\b`, 'i').test(desc)
+}
+
+function riconcilia(fatture: Fattura[], movimenti: Movimento[]): RigaRiconciliazione[] {
+  const used = new Set<number>()
+
+  return fatture.map(fattura => {
+    // Priority 1: match by invoice number in bank description
+    let idx = movimenti.findIndex((m, i) =>
+      !used.has(i) && matchInDescription(m.descrizione, fattura.numero)
+    )
+
+    if (idx >= 0) {
+      used.add(idx)
+      const mov = movimenti[idx]
+      const diff = Math.round((mov.entrate - fattura.totale) * 100) / 100
+      return {
+        fattura,
+        movimento: mov,
+        tipoMatch: 'numero',
+        differenza: diff,
+        stato: Math.abs(diff) < 0.02 ? 'pagata' : 'importo_diverso',
+      } as RigaRiconciliazione
+    }
+
+    // Priority 2: match by amount (fallback — marked as uncertain)
+    idx = movimenti.findIndex((m, i) =>
+      !used.has(i) && Math.abs(m.entrate - fattura.totale) < 0.02
+    )
+
+    if (idx >= 0) {
+      used.add(idx)
+      return {
+        fattura,
+        movimento: movimenti[idx],
+        tipoMatch: 'importo',
+        differenza: 0,
+        stato: 'trovata_per_importo',
+      } as RigaRiconciliazione
+    }
+
+    return {
+      fattura,
+      movimento: null,
+      tipoMatch: null,
+      differenza: fattura.totale,
+      stato: 'non_pagata',
+    } as RigaRiconciliazione
+  })
+}
+
+// ─── UI helpers ───────────────────────────────────────────────────────────────
+
+function formatEuro(n: number) {
+  return n.toLocaleString('it-IT', { style: 'currency', currency: 'EUR' })
+}
+
+function StatoBadge({ stato }: { stato: StatoRiconciliazione }) {
+  const map: Record<StatoRiconciliazione, { label: string; cls: string }> = {
+    pagata:             { label: '✓ Pagata',         cls: 'bg-green-100 text-green-800 border-green-200' },
+    importo_diverso:    { label: '⚠ Importo diverso', cls: 'bg-orange-100 text-orange-800 border-orange-200' },
+    trovata_per_importo:{ label: '~ Incerta',         cls: 'bg-blue-100 text-blue-800 border-blue-200' },
+    non_pagata:         { label: '✗ Non pagata',      cls: 'bg-red-100 text-red-800 border-red-200' },
+  }
+  const { label, cls } = map[stato]
+  return (
+    <span className={cn('inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium', cls)}>
+      {label}
+    </span>
+  )
+}
+
+// ─── Upload zone ──────────────────────────────────────────────────────────────
+
+function UploadZone({ label, description, accept, color, icon: Icon, file, onFile, onClear }: {
   label: string
   description: string
   accept: string
-  icon: React.ElementType
   color: string
-  state: FileState
+  icon: React.ElementType
+  file: File | null
   onFile: (f: File) => void
   onClear: () => void
 }) {
   const inputRef = useRef<HTMLInputElement>(null)
-
-  function handleDrop(e: React.DragEvent) {
-    e.preventDefault()
-    const f = e.dataTransfer.files[0]
-    if (f) onFile(f)
-  }
-
-  function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const f = e.target.files?.[0]
-    if (f) onFile(f)
-    e.target.value = ''
-  }
+  const [dragging, setDragging] = useState(false)
 
   return (
     <div
       className={cn(
-        'border-2 rounded-xl p-6 transition-colors cursor-pointer select-none',
-        state.dragging ? 'border-primary bg-primary/5' : 'border-dashed border-muted-foreground/30 hover:border-primary/50 hover:bg-accent/30',
-        state.file && 'border-solid border-green-500/60 bg-green-50 dark:bg-green-950/20'
+        'border-2 rounded-xl p-6 transition-colors select-none',
+        file
+          ? 'border-solid border-green-500/60 bg-green-50 dark:bg-green-950/20'
+          : dragging
+          ? 'border-primary bg-primary/5 cursor-copy'
+          : 'border-dashed border-muted-foreground/30 hover:border-primary/50 hover:bg-accent/30 cursor-pointer'
       )}
-      onClick={() => !state.file && inputRef.current?.click()}
-      onDragOver={(e) => { e.preventDefault() }}
-      onDrop={handleDrop}
+      onClick={() => !file && inputRef.current?.click()}
+      onDragOver={(e) => { e.preventDefault(); setDragging(true) }}
+      onDragLeave={() => setDragging(false)}
+      onDrop={(e) => {
+        e.preventDefault(); setDragging(false)
+        const f = e.dataTransfer.files[0]
+        if (f) onFile(f)
+      }}
     >
       <input
         ref={inputRef}
         type="file"
         accept={accept}
         className="hidden"
-        onChange={handleChange}
+        onChange={(e) => { const f = e.target.files?.[0]; if (f) onFile(f); e.target.value = '' }}
       />
-
       <div className="flex flex-col items-center gap-3 text-center">
-        {state.file ? (
+        {file ? (
           <>
             <CheckCircle2 className="h-10 w-10 text-green-500" />
-            <div className="space-y-1">
+            <div className="space-y-0.5">
               <p className="font-semibold text-sm text-green-700 dark:text-green-400">{label} caricato</p>
-              <p className="text-xs text-muted-foreground break-all max-w-xs">{state.file.name}</p>
-              <p className="text-xs text-muted-foreground">
-                {(state.file.size / 1024).toFixed(1)} KB
-              </p>
+              <p className="text-xs text-muted-foreground break-all max-w-xs">{file.name}</p>
+              <p className="text-xs text-muted-foreground">{(file.size / 1024).toFixed(0)} KB</p>
             </div>
             <button
               type="button"
               onClick={(e) => { e.stopPropagation(); onClear() }}
               className="flex items-center gap-1 text-xs text-destructive hover:underline"
             >
-              <X className="h-3 w-3" />
-              Rimuovi
+              <X className="h-3 w-3" /> Rimuovi
             </button>
           </>
         ) : (
@@ -101,52 +256,232 @@ function UploadZone({
   )
 }
 
+// ─── Main ─────────────────────────────────────────────────────────────────────
+
 export function FatturePagamentiClient() {
-  const [fatture, setFatture] = useState<FileState>({ file: null, dragging: false })
-  const [pagamenti, setPagamenti] = useState<FileState>({ file: null, dragging: false })
+  const [fattureFile, setFattureFile] = useState<File | null>(null)
+  const [pagamentiFile, setPagamentiFile] = useState<File | null>(null)
+  const [righe, setRighe] = useState<RigaRiconciliazione[] | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  function resetRisultati() { setRighe(null); setError(null) }
+
+  async function elabora() {
+    if (!fattureFile || !pagamentiFile) return
+    setLoading(true)
+    setError(null)
+    try {
+      const [bufFat, bufPag] = await Promise.all([
+        fattureFile.arrayBuffer(),
+        pagamentiFile.arrayBuffer(),
+      ])
+      const wbFat = XLSX.read(bufFat, { type: 'array' })
+      const wbPag = XLSX.read(bufPag, { type: 'array' })
+
+      const fatture   = parseFatture(wbFat.Sheets[wbFat.SheetNames[0]])
+      const movimenti = parseMovimenti(wbPag.Sheets[wbPag.SheetNames[0]])
+
+      if (!fatture.length)
+        throw new Error('Nessuna fattura trovata. Verifica che il file abbia la colonna "Numero" in intestazione.')
+      if (!movimenti.length)
+        throw new Error('Nessun movimento trovato. Verifica che il file abbia la riga "Data operazione" come intestazione.')
+
+      setRighe(riconcilia(fatture, movimenti))
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Errore durante l\'elaborazione')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const canElabora = !!fattureFile && !!pagamentiFile
+
+  const summary = righe ? {
+    pagate:          righe.filter(r => r.stato === 'pagata').length,
+    perImporto:      righe.filter(r => r.stato === 'trovata_per_importo').length,
+    importoDiverso:  righe.filter(r => r.stato === 'importo_diverso').length,
+    nonPagate:       righe.filter(r => r.stato === 'non_pagata').length,
+    totFatturato:    righe.reduce((s, r) => s + r.fattura.totale, 0),
+    totIncassato:    righe.filter(r => r.movimento).reduce((s, r) => s + (r.movimento?.entrate ?? 0), 0),
+    totNonPagato:    righe.filter(r => r.stato === 'non_pagata').reduce((s, r) => s + r.fattura.totale, 0),
+  } : null
 
   return (
-    <div className="space-y-6 max-w-2xl">
+    <div className="space-y-6 max-w-5xl">
       <p className="text-sm text-muted-foreground">
-        Carica i file esportati dal portale delle fatture elettroniche e dal sito della banca per l&apos;analisi e la riconciliazione.
+        Carica le fatture emesse e i movimenti bancari per verificare quali fatture sono state pagate.
       </p>
 
+      {/* Upload zones */}
       <div className="grid gap-4 sm:grid-cols-2">
         <UploadZone
           label="Fatture"
-          description="Esportazione dal portale fatture elettroniche"
-          accept=".xml,.zip,.csv,.xlsx,.xls,.json"
-          icon={FileText}
+          description="Elenco fatture emesse (XLSX)"
+          accept=".xlsx,.xls,.csv"
           color="bg-blue-500"
-          state={fatture}
-          onFile={(f) => setFatture({ file: f, dragging: false })}
-          onClear={() => setFatture({ file: null, dragging: false })}
+          icon={FileText}
+          file={fattureFile}
+          onFile={(f) => { setFattureFile(f); resetRisultati() }}
+          onClear={() => { setFattureFile(null); resetRisultati() }}
         />
-
         <UploadZone
-          label="Pagamenti"
-          description="Esportazione movimenti bancari"
-          accept=".csv,.xlsx,.xls,.xml,.json,.ofx,.qif"
-          icon={CreditCard}
+          label="Movimenti bancari"
+          description="Estratto conto movimenti (XLS/XLSX)"
+          accept=".xlsx,.xls,.csv"
           color="bg-emerald-500"
-          state={pagamenti}
-          onFile={(f) => setPagamenti({ file: f, dragging: false })}
-          onClear={() => setPagamenti({ file: null, dragging: false })}
+          icon={CreditCard}
+          file={pagamentiFile}
+          onFile={(f) => { setPagamentiFile(f); resetRisultati() }}
+          onClear={() => { setPagamentiFile(null); resetRisultati() }}
         />
       </div>
 
-      {(fatture.file || pagamenti.file) && (
-        <div className="rounded-lg border bg-muted/40 p-4 text-sm space-y-1">
-          <p className="font-medium">File pronti:</p>
-          {fatture.file && (
-            <p className="text-muted-foreground">
-              <span className="font-medium text-blue-600">Fatture:</span> {fatture.file.name}
-            </p>
+      {/* Action button */}
+      {canElabora && (
+        <div className="flex gap-3 items-center">
+          <button
+            onClick={elabora}
+            disabled={loading}
+            className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 disabled:opacity-50 transition-colors"
+          >
+            <BarChart3 className="h-4 w-4" />
+            {loading ? 'Elaborazione in corso…' : 'Confronta e riconcilia'}
+          </button>
+          {righe && (
+            <button
+              onClick={resetRisultati}
+              className="text-xs text-muted-foreground hover:text-foreground underline"
+            >
+              Azzera risultati
+            </button>
           )}
-          {pagamenti.file && (
-            <p className="text-muted-foreground">
-              <span className="font-medium text-emerald-600">Pagamenti:</span> {pagamenti.file.name}
-            </p>
+        </div>
+      )}
+
+      {/* Error */}
+      {error && (
+        <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
+          {error}
+        </div>
+      )}
+
+      {/* Results */}
+      {righe && summary && (
+        <div className="space-y-4">
+
+          {/* KPI cards */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            {[
+              { label: 'Pagate',         value: summary.pagate,        cls: 'bg-green-50 dark:bg-green-950/20 text-green-700 border-green-200' },
+              { label: 'Incerte',        value: summary.perImporto,    cls: 'bg-blue-50 dark:bg-blue-950/20 text-blue-700 border-blue-200' },
+              { label: 'Importo diverso',value: summary.importoDiverso, cls: 'bg-orange-50 dark:bg-orange-950/20 text-orange-700 border-orange-200' },
+              { label: 'Non pagate',     value: summary.nonPagate,     cls: 'bg-red-50 dark:bg-red-950/20 text-red-700 border-red-200' },
+            ].map(({ label, value, cls }) => (
+              <div key={label} className={cn('rounded-lg border p-3 text-center', cls)}>
+                <div className="text-2xl font-bold">{value}</div>
+                <div className="text-xs mt-0.5 opacity-80">{label}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* Amount summary */}
+          <div className="grid grid-cols-3 gap-3 text-sm">
+            <div className="rounded-lg border bg-card p-3">
+              <div className="text-xs text-muted-foreground">Totale fatturato</div>
+              <div className="font-semibold tabular-nums">{formatEuro(summary.totFatturato)}</div>
+            </div>
+            <div className="rounded-lg border bg-card p-3">
+              <div className="text-xs text-muted-foreground">Totale incassato</div>
+              <div className="font-semibold text-green-700 tabular-nums">{formatEuro(summary.totIncassato)}</div>
+            </div>
+            <div className="rounded-lg border bg-card p-3">
+              <div className="text-xs text-muted-foreground">Da incassare</div>
+              <div className={cn('font-semibold tabular-nums', summary.totNonPagato > 0 ? 'text-red-600' : 'text-muted-foreground')}>
+                {formatEuro(summary.totNonPagato)}
+              </div>
+            </div>
+          </div>
+
+          {/* Detail table */}
+          <div className="rounded-lg border overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b bg-muted/50 text-xs">
+                  <th className="px-3 py-2 text-left font-medium text-muted-foreground">N° Fattura</th>
+                  <th className="px-3 py-2 text-left font-medium text-muted-foreground">Data</th>
+                  <th className="px-3 py-2 text-left font-medium text-muted-foreground">Cliente</th>
+                  <th className="px-3 py-2 text-right font-medium text-muted-foreground">Importo</th>
+                  <th className="px-3 py-2 text-left font-medium text-muted-foreground">Data pag.</th>
+                  <th className="px-3 py-2 text-right font-medium text-muted-foreground">Ricevuto</th>
+                  <th className="px-3 py-2 text-left font-medium text-muted-foreground">Stato</th>
+                </tr>
+              </thead>
+              <tbody>
+                {righe.map((riga, i) => (
+                  <tr
+                    key={i}
+                    className={cn(
+                      'border-b last:border-0 transition-colors',
+                      riga.stato === 'non_pagata'
+                        ? 'bg-red-50/60 hover:bg-red-50 dark:bg-red-950/10'
+                        : 'hover:bg-muted/30'
+                    )}
+                  >
+                    <td className="px-3 py-2 font-mono text-xs font-semibold">{riga.fattura.numero}</td>
+                    <td className="px-3 py-2 text-xs text-muted-foreground whitespace-nowrap">{riga.fattura.data}</td>
+                    <td className="px-3 py-2 max-w-[150px] truncate text-xs" title={riga.fattura.cliente}>
+                      {riga.fattura.cliente}
+                    </td>
+                    <td className="px-3 py-2 text-right font-medium tabular-nums">{formatEuro(riga.fattura.totale)}</td>
+                    <td className="px-3 py-2 text-xs text-muted-foreground whitespace-nowrap">
+                      {riga.movimento?.dataOperazione ?? <span className="text-muted-foreground/50">—</span>}
+                    </td>
+                    <td className="px-3 py-2 text-right tabular-nums text-xs">
+                      {riga.movimento ? (
+                        <>
+                          <span>{formatEuro(riga.movimento.entrate)}</span>
+                          {riga.stato === 'importo_diverso' && (
+                            <span className="block text-orange-600 text-[10px]">
+                              diff. {riga.differenza > 0 ? '+' : ''}{formatEuro(riga.differenza)}
+                            </span>
+                          )}
+                        </>
+                      ) : (
+                        <span className="text-muted-foreground/50">—</span>
+                      )}
+                    </td>
+                    <td className="px-3 py-2">
+                      <StatoBadge stato={riga.stato} />
+                      {riga.tipoMatch === 'importo' && (
+                        <span className="block text-[10px] text-muted-foreground mt-0.5">
+                          match per importo
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Collapsible: bank descriptions */}
+          {righe.some(r => r.movimento) && (
+            <details className="text-xs">
+              <summary className="cursor-pointer text-muted-foreground hover:text-foreground select-none">
+                Mostra descrizioni bonifici
+              </summary>
+              <div className="mt-2 rounded-lg bg-muted/40 p-3 space-y-1.5 font-mono text-[10px] leading-relaxed">
+                {righe
+                  .filter(r => r.movimento)
+                  .map((r, i) => (
+                    <div key={i} className="flex gap-2">
+                      <span className="font-bold text-foreground shrink-0">{r.fattura.numero}:</span>
+                      <span className="text-muted-foreground break-all">{r.movimento!.descrizione}</span>
+                    </div>
+                  ))}
+              </div>
+            </details>
           )}
         </div>
       )}
