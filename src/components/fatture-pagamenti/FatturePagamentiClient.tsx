@@ -2,7 +2,7 @@
 
 import { useRef, useState } from 'react'
 import * as XLSX from 'xlsx'
-import { FileText, CreditCard, Upload, X, CheckCircle2, BarChart3 } from 'lucide-react'
+import { FileText, CreditCard, Upload, X, CheckCircle2, BarChart3, Download, Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -30,33 +30,35 @@ interface RigaRiconciliazione {
   stato: StatoRiconciliazione
 }
 
+interface ParsedDataset {
+  data: Fattura[] | Movimento[]
+  filename: string
+  count: number
+}
+
 // ─── Parsing ─────────────────────────────────────────────────────────────────
 
 function parseImporto(val: unknown): number {
   if (typeof val === 'number') return val
   if (!val) return 0
-  // Handle Italian format: "1.418,65 €" → 1418.65
   const s = String(val)
     .replace(/[€\s]/g, '')
-    .replace(/\./g, '')   // remove thousands separator
-    .replace(',', '.')    // decimal separator
+    .replace(/\./g, '')
+    .replace(',', '.')
   return parseFloat(s) || 0
 }
 
 function parseFatture(ws: XLSX.WorkSheet): Fattura[] {
   const data = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, defval: '' })
   if (data.length < 2) return []
-
   const headers = (data[0] as string[]).map(h => String(h).trim())
   const idx = {
-    numero: headers.findIndex(h => h === 'Numero'),
-    data:   headers.findIndex(h => h === 'Data'),
+    numero:  headers.findIndex(h => h === 'Numero'),
+    data:    headers.findIndex(h => h === 'Data'),
     cliente: headers.findIndex(h => h === 'Cliente'),
-    totale: headers.findIndex(h => h === 'Totale'),
+    totale:  headers.findIndex(h => h === 'Totale'),
   }
-
   if (idx.numero < 0 || idx.totale < 0) return []
-
   return (data.slice(1) as unknown[][])
     .filter(row => row[idx.numero] && String(row[idx.numero]).trim())
     .map(row => ({
@@ -69,24 +71,19 @@ function parseFatture(ws: XLSX.WorkSheet): Fattura[] {
 
 function parseMovimenti(ws: XLSX.WorkSheet): Movimento[] {
   const data = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, defval: '' })
-
-  // Find header row dynamically (look for "Data operazione")
   let headerIdx = -1
   for (let i = 0; i < data.length; i++) {
     if ((data[i] as unknown[]).some(c => String(c).trim() === 'Data operazione')) {
-      headerIdx = i
-      break
+      headerIdx = i; break
     }
   }
   if (headerIdx < 0) return []
-
   const headers = (data[headerIdx] as string[]).map(h => String(h).trim())
   const idx = {
-    dataOp: headers.findIndex(h => h === 'Data operazione'),
-    desc:   headers.findIndex(h => h === 'Descrizione'),
+    dataOp:  headers.findIndex(h => h === 'Data operazione'),
+    desc:    headers.findIndex(h => h === 'Descrizione'),
     entrate: headers.findIndex(h => h === 'Entrate'),
   }
-
   return (data.slice(headerIdx + 1) as unknown[][])
     .filter(row => row[idx.dataOp] && String(row[idx.dataOp]).trim())
     .map(row => ({
@@ -100,64 +97,38 @@ function parseMovimenti(ws: XLSX.WorkSheet): Movimento[] {
 // ─── Reconciliation ───────────────────────────────────────────────────────────
 
 function matchInDescription(desc: string, numero: string): boolean {
-  // Direct substring: "10/001" found in "Fat 10/001/26 ..."
   if (desc.toLowerCase().includes(numero.toLowerCase())) return true
-
-  // Base number (first segment) with Italian invoice wording
-  // e.g. "N. 6", "ft 6", "ft. 6", "fat 6", "ft 06"
   const base = numero.split('/')[0].replace(/^0+/, '') || numero
   return new RegExp(`\\b(n\\.?\\s*|ft\\.?\\s*|fat\\s+)0*${base}\\b`, 'i').test(desc)
 }
 
 function riconcilia(fatture: Fattura[], movimenti: Movimento[]): RigaRiconciliazione[] {
   const used = new Set<number>()
-
   return fatture.map(fattura => {
-    // Priority 1: match by invoice number in bank description
     let idx = movimenti.findIndex((m, i) =>
       !used.has(i) && matchInDescription(m.descrizione, fattura.numero)
     )
-
     if (idx >= 0) {
       used.add(idx)
       const mov = movimenti[idx]
       const diff = Math.round((mov.entrate - fattura.totale) * 100) / 100
-      return {
-        fattura,
-        movimento: mov,
-        tipoMatch: 'numero',
-        differenza: diff,
-        stato: Math.abs(diff) < 0.02 ? 'pagata' : 'importo_diverso',
-      } as RigaRiconciliazione
+      return { fattura, movimento: mov, tipoMatch: 'numero', differenza: diff,
+               stato: Math.abs(diff) < 0.02 ? 'pagata' : 'importo_diverso' } as RigaRiconciliazione
     }
-
-    // Priority 2: match by amount (fallback — marked as uncertain)
     idx = movimenti.findIndex((m, i) =>
       !used.has(i) && Math.abs(m.entrate - fattura.totale) < 0.02
     )
-
     if (idx >= 0) {
       used.add(idx)
-      return {
-        fattura,
-        movimento: movimenti[idx],
-        tipoMatch: 'importo',
-        differenza: 0,
-        stato: 'trovata_per_importo',
-      } as RigaRiconciliazione
+      return { fattura, movimento: movimenti[idx], tipoMatch: 'importo', differenza: 0,
+               stato: 'trovata_per_importo' } as RigaRiconciliazione
     }
-
-    return {
-      fattura,
-      movimento: null,
-      tipoMatch: null,
-      differenza: fattura.totale,
-      stato: 'non_pagata',
-    } as RigaRiconciliazione
+    return { fattura, movimento: null, tipoMatch: null, differenza: fattura.totale,
+             stato: 'non_pagata' } as RigaRiconciliazione
   })
 }
 
-// ─── UI helpers ───────────────────────────────────────────────────────────────
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function formatEuro(n: number) {
   return n.toLocaleString('it-IT', { style: 'currency', currency: 'EUR' })
@@ -165,10 +136,10 @@ function formatEuro(n: number) {
 
 function StatoBadge({ stato }: { stato: StatoRiconciliazione }) {
   const map: Record<StatoRiconciliazione, { label: string; cls: string }> = {
-    pagata:             { label: '✓ Pagata',         cls: 'bg-green-100 text-green-800 border-green-200' },
-    importo_diverso:    { label: '⚠ Importo diverso', cls: 'bg-orange-100 text-orange-800 border-orange-200' },
-    trovata_per_importo:{ label: '~ Incerta',         cls: 'bg-blue-100 text-blue-800 border-blue-200' },
-    non_pagata:         { label: '✗ Non pagata',      cls: 'bg-red-100 text-red-800 border-red-200' },
+    pagata:              { label: '✓ Pagata',          cls: 'bg-green-100 text-green-800 border-green-200' },
+    importo_diverso:     { label: '⚠ Importo diverso', cls: 'bg-orange-100 text-orange-800 border-orange-200' },
+    trovata_per_importo: { label: '~ Incerta',          cls: 'bg-blue-100 text-blue-800 border-blue-200' },
+    non_pagata:          { label: '✗ Non pagata',       cls: 'bg-red-100 text-red-800 border-red-200' },
   }
   const { label, cls } = map[stato]
   return (
@@ -180,36 +151,39 @@ function StatoBadge({ stato }: { stato: StatoRiconciliazione }) {
 
 // ─── Upload zone ──────────────────────────────────────────────────────────────
 
-function UploadZone({ label, description, accept, color, icon: Icon, file, onFile, onClear }: {
+function UploadZone({ label, description, accept, color, icon: Icon, file, retained, onFile, onClear }: {
   label: string
   description: string
   accept: string
   color: string
   icon: React.ElementType
   file: File | null
+  retained: ParsedDataset | null
   onFile: (f: File) => void
   onClear: () => void
 }) {
   const inputRef = useRef<HTMLInputElement>(null)
   const [dragging, setDragging] = useState(false)
+  const hasData = !!retained
 
   return (
     <div
       className={cn(
-        'border-2 rounded-xl p-6 transition-colors select-none',
+        'border-2 rounded-xl p-5 transition-colors select-none',
         file
           ? 'border-solid border-green-500/60 bg-green-50 dark:bg-green-950/20'
+          : hasData
+          ? 'border-solid border-dashed border-primary/40 bg-primary/3 cursor-pointer hover:border-primary/60'
           : dragging
           ? 'border-primary bg-primary/5 cursor-copy'
           : 'border-dashed border-muted-foreground/30 hover:border-primary/50 hover:bg-accent/30 cursor-pointer'
       )}
-      onClick={() => !file && inputRef.current?.click()}
+      onClick={() => inputRef.current?.click()}
       onDragOver={(e) => { e.preventDefault(); setDragging(true) }}
       onDragLeave={() => setDragging(false)}
       onDrop={(e) => {
         e.preventDefault(); setDragging(false)
-        const f = e.dataTransfer.files[0]
-        if (f) onFile(f)
+        const f = e.dataTransfer.files[0]; if (f) onFile(f)
       }}
     >
       <input
@@ -219,14 +193,16 @@ function UploadZone({ label, description, accept, color, icon: Icon, file, onFil
         className="hidden"
         onChange={(e) => { const f = e.target.files?.[0]; if (f) onFile(f); e.target.value = '' }}
       />
-      <div className="flex flex-col items-center gap-3 text-center">
+      <div className="flex flex-col items-center gap-2.5 text-center">
         {file ? (
           <>
-            <CheckCircle2 className="h-10 w-10 text-green-500" />
+            <CheckCircle2 className="h-9 w-9 text-green-500" />
             <div className="space-y-0.5">
               <p className="font-semibold text-sm text-green-700 dark:text-green-400">{label} caricato</p>
               <p className="text-xs text-muted-foreground break-all max-w-xs">{file.name}</p>
-              <p className="text-xs text-muted-foreground">{(file.size / 1024).toFixed(0)} KB</p>
+              {retained && (
+                <p className="text-xs text-green-600">{retained.count} righe pronte</p>
+              )}
             </div>
             <button
               type="button"
@@ -236,16 +212,31 @@ function UploadZone({ label, description, accept, color, icon: Icon, file, onFil
               <X className="h-3 w-3" /> Rimuovi
             </button>
           </>
+        ) : hasData ? (
+          <>
+            <div className={cn('p-2.5 rounded-full opacity-60', color)}>
+              <Icon className="h-6 w-6 text-white" />
+            </div>
+            <div className="space-y-0.5">
+              <p className="font-semibold text-sm">{label}</p>
+              <p className="text-xs text-muted-foreground">Ultimo: {retained!.filename}</p>
+              <p className="text-xs font-medium text-primary">{retained!.count} righe disponibili</p>
+            </div>
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground mt-0.5">
+              <Upload className="h-3 w-3" />
+              <span>Clicca per aggiornare</span>
+            </div>
+          </>
         ) : (
           <>
-            <div className={cn('p-3 rounded-full', color)}>
-              <Icon className="h-7 w-7 text-white" />
+            <div className={cn('p-2.5 rounded-full', color)}>
+              <Icon className="h-6 w-6 text-white" />
             </div>
             <div className="space-y-1">
               <p className="font-semibold text-sm">{label}</p>
               <p className="text-xs text-muted-foreground">{description}</p>
             </div>
-            <div className="flex items-center gap-1.5 text-xs text-muted-foreground mt-1">
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
               <Upload className="h-3.5 w-3.5" />
               <span>Clicca o trascina il file qui</span>
             </div>
@@ -259,104 +250,185 @@ function UploadZone({ label, description, accept, color, icon: Icon, file, onFil
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
 export function FatturePagamentiClient() {
-  const [fattureFile, setFattureFile] = useState<File | null>(null)
+  const [fattureFile, setFattureFile]     = useState<File | null>(null)
   const [pagamentiFile, setPagamentiFile] = useState<File | null>(null)
-  const [righe, setRighe] = useState<RigaRiconciliazione[] | null>(null)
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
 
-  function resetRisultati() { setRighe(null); setError(null) }
+  // Parsed datasets survive file removal
+  const [parsedFatture,   setParsedFatture]   = useState<{ rows: Fattura[];   info: ParsedDataset } | null>(null)
+  const [parsedMovimenti, setParsedMovimenti] = useState<{ rows: Movimento[]; info: ParsedDataset } | null>(null)
 
-  async function elabora() {
-    if (!fattureFile || !pagamentiFile) return
+  const [righe,       setRighe]       = useState<RigaRiconciliazione[] | null>(null)
+  const [loading,     setLoading]     = useState(false)
+  const [pdfLoading,  setPdfLoading]  = useState(false)
+  const [error,       setError]       = useState<string | null>(null)
+  const [parseError,  setParseError]  = useState<{ fat?: string; pag?: string }>({})
+
+  async function handleFattureFile(f: File) {
+    setFattureFile(f)
+    setRighe(null)
+    setParseError(e => ({ ...e, fat: undefined }))
+    try {
+      const buf = await f.arrayBuffer()
+      const wb  = XLSX.read(buf, { type: 'array' })
+      const rows = parseFatture(wb.Sheets[wb.SheetNames[0]])
+      if (!rows.length) throw new Error('Nessuna fattura trovata. Verifica intestazioni colonne.')
+      setParsedFatture({ rows, info: { data: rows, filename: f.name, count: rows.length } })
+    } catch (e) {
+      setParseError(prev => ({ ...prev, fat: e instanceof Error ? e.message : 'Errore lettura file' }))
+      setParsedFatture(null)
+    }
+  }
+
+  async function handlePagamentiFile(f: File) {
+    setPagamentiFile(f)
+    setRighe(null)
+    setParseError(e => ({ ...e, pag: undefined }))
+    try {
+      const buf = await f.arrayBuffer()
+      const wb  = XLSX.read(buf, { type: 'array' })
+      const rows = parseMovimenti(wb.Sheets[wb.SheetNames[0]])
+      if (!rows.length) throw new Error('Nessun movimento trovato. Verifica intestazioni colonne.')
+      setParsedMovimenti({ rows, info: { data: rows, filename: f.name, count: rows.length } })
+    } catch (e) {
+      setParseError(prev => ({ ...prev, pag: e instanceof Error ? e.message : 'Errore lettura file' }))
+      setParsedMovimenti(null)
+    }
+  }
+
+  function elabora() {
+    if (!parsedFatture || !parsedMovimenti) return
     setLoading(true)
     setError(null)
     try {
-      const [bufFat, bufPag] = await Promise.all([
-        fattureFile.arrayBuffer(),
-        pagamentiFile.arrayBuffer(),
-      ])
-      const wbFat = XLSX.read(bufFat, { type: 'array' })
-      const wbPag = XLSX.read(bufPag, { type: 'array' })
-
-      const fatture   = parseFatture(wbFat.Sheets[wbFat.SheetNames[0]])
-      const movimenti = parseMovimenti(wbPag.Sheets[wbPag.SheetNames[0]])
-
-      if (!fatture.length)
-        throw new Error('Nessuna fattura trovata. Verifica che il file abbia la colonna "Numero" in intestazione.')
-      if (!movimenti.length)
-        throw new Error('Nessun movimento trovato. Verifica che il file abbia la riga "Data operazione" come intestazione.')
-
-      setRighe(riconcilia(fatture, movimenti))
+      setRighe(riconcilia(parsedFatture.rows, parsedMovimenti.rows))
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Errore durante l\'elaborazione')
+      setError(e instanceof Error ? e.message : 'Errore durante la riconciliazione')
     } finally {
       setLoading(false)
     }
   }
 
-  const canElabora = !!fattureFile && !!pagamentiFile
+  async function scaricaPdf() {
+    if (!righe) return
+    setPdfLoading(true)
+    try {
+      const [{ pdf }, { default: PdfRiconciliazione }] = await Promise.all([
+        import('@react-pdf/renderer'),
+        import('./PdfRiconciliazione'),
+      ])
+      const oggi = new Date().toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric' })
+      const blob = await pdf(<PdfRiconciliazione righe={righe} generatoIl={oggi} />).toBlob()
+      const url  = URL.createObjectURL(blob)
+      const a    = document.createElement('a')
+      a.href     = url
+      a.download = `riconciliazione-${oggi.replace(/\//g, '-')}.pdf`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Errore generazione PDF')
+    } finally {
+      setPdfLoading(false)
+    }
+  }
+
+  const canElabora   = !!parsedFatture && !!parsedMovimenti
+  const canPdf       = !!righe && !pdfLoading
 
   const summary = righe ? {
-    pagate:          righe.filter(r => r.stato === 'pagata').length,
-    perImporto:      righe.filter(r => r.stato === 'trovata_per_importo').length,
-    importoDiverso:  righe.filter(r => r.stato === 'importo_diverso').length,
-    nonPagate:       righe.filter(r => r.stato === 'non_pagata').length,
-    totFatturato:    righe.reduce((s, r) => s + r.fattura.totale, 0),
-    totIncassato:    righe.filter(r => r.movimento).reduce((s, r) => s + (r.movimento?.entrate ?? 0), 0),
-    totNonPagato:    righe.filter(r => r.stato === 'non_pagata').reduce((s, r) => s + r.fattura.totale, 0),
+    pagate:         righe.filter(r => r.stato === 'pagata').length,
+    perImporto:     righe.filter(r => r.stato === 'trovata_per_importo').length,
+    importoDiverso: righe.filter(r => r.stato === 'importo_diverso').length,
+    nonPagate:      righe.filter(r => r.stato === 'non_pagata').length,
+    totFatturato:   righe.reduce((s, r) => s + r.fattura.totale, 0),
+    totIncassato:   righe.filter(r => r.movimento).reduce((s, r) => s + (r.movimento?.entrate ?? 0), 0),
+    totNonPagato:   righe.filter(r => r.stato === 'non_pagata').reduce((s, r) => s + r.fattura.totale, 0),
   } : null
 
   return (
     <div className="space-y-6 max-w-5xl">
       <p className="text-sm text-muted-foreground">
         Carica le fatture emesse e i movimenti bancari per verificare quali fatture sono state pagate.
+        I dati rimangono disponibili anche dopo aver rimosso il file.
       </p>
 
       {/* Upload zones */}
       <div className="grid gap-4 sm:grid-cols-2">
-        <UploadZone
-          label="Fatture"
-          description="Elenco fatture emesse (XLSX)"
-          accept=".xlsx,.xls,.csv"
-          color="bg-blue-500"
-          icon={FileText}
-          file={fattureFile}
-          onFile={(f) => { setFattureFile(f); resetRisultati() }}
-          onClear={() => { setFattureFile(null); resetRisultati() }}
-        />
-        <UploadZone
-          label="Movimenti bancari"
-          description="Estratto conto movimenti (XLS/XLSX)"
-          accept=".xlsx,.xls,.csv"
-          color="bg-emerald-500"
-          icon={CreditCard}
-          file={pagamentiFile}
-          onFile={(f) => { setPagamentiFile(f); resetRisultati() }}
-          onClear={() => { setPagamentiFile(null); resetRisultati() }}
-        />
-      </div>
-
-      {/* Action button */}
-      {canElabora && (
-        <div className="flex gap-3 items-center">
-          <button
-            onClick={elabora}
-            disabled={loading}
-            className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 disabled:opacity-50 transition-colors"
-          >
-            <BarChart3 className="h-4 w-4" />
-            {loading ? 'Elaborazione in corso…' : 'Confronta e riconcilia'}
-          </button>
-          {righe && (
-            <button
-              onClick={resetRisultati}
-              className="text-xs text-muted-foreground hover:text-foreground underline"
-            >
-              Azzera risultati
-            </button>
+        <div className="space-y-1">
+          <UploadZone
+            label="Fatture"
+            description="Elenco fatture emesse (XLSX)"
+            accept=".xlsx,.xls,.csv"
+            color="bg-blue-500"
+            icon={FileText}
+            file={fattureFile}
+            retained={parsedFatture?.info ?? null}
+            onFile={handleFattureFile}
+            onClear={() => { setFattureFile(null); setRighe(null) }}
+          />
+          {parseError.fat && (
+            <p className="text-xs text-destructive px-1">{parseError.fat}</p>
           )}
         </div>
+        <div className="space-y-1">
+          <UploadZone
+            label="Movimenti bancari"
+            description="Estratto conto movimenti (XLS/XLSX)"
+            accept=".xlsx,.xls,.csv"
+            color="bg-emerald-500"
+            icon={CreditCard}
+            file={pagamentiFile}
+            retained={parsedMovimenti?.info ?? null}
+            onFile={handlePagamentiFile}
+            onClear={() => { setPagamentiFile(null); setRighe(null) }}
+          />
+          {parseError.pag && (
+            <p className="text-xs text-destructive px-1">{parseError.pag}</p>
+          )}
+        </div>
+      </div>
+
+      {/* Actions */}
+      <div className="flex gap-3 items-center flex-wrap">
+        <button
+          onClick={elabora}
+          disabled={!canElabora || loading}
+          className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+        >
+          {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <BarChart3 className="h-4 w-4" />}
+          {loading ? 'Elaborazione…' : 'Confronta e riconcilia'}
+        </button>
+
+        {canPdf && (
+          <button
+            onClick={scaricaPdf}
+            disabled={pdfLoading}
+            className="flex items-center gap-2 px-4 py-2 bg-secondary text-secondary-foreground rounded-lg text-sm font-medium hover:bg-secondary/80 disabled:opacity-50 transition-colors border"
+          >
+            {pdfLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+            {pdfLoading ? 'Generazione PDF…' : 'Scarica PDF'}
+          </button>
+        )}
+
+        {righe && (
+          <button
+            onClick={() => setRighe(null)}
+            className="text-xs text-muted-foreground hover:text-foreground underline"
+          >
+            Azzera risultati
+          </button>
+        )}
+      </div>
+
+      {!canElabora && (
+        <p className="text-xs text-muted-foreground -mt-3">
+          {!parsedFatture && !parsedMovimenti
+            ? 'Carica entrambi i file per abilitare la riconciliazione.'
+            : !parsedFatture
+            ? 'Carica il file Fatture per abilitare la riconciliazione.'
+            : 'Carica il file Movimenti per abilitare la riconciliazione.'}
+        </p>
       )}
 
       {/* Error */}
@@ -369,14 +441,13 @@ export function FatturePagamentiClient() {
       {/* Results */}
       {righe && summary && (
         <div className="space-y-4">
-
           {/* KPI cards */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             {[
-              { label: 'Pagate',         value: summary.pagate,        cls: 'bg-green-50 dark:bg-green-950/20 text-green-700 border-green-200' },
-              { label: 'Incerte',        value: summary.perImporto,    cls: 'bg-blue-50 dark:bg-blue-950/20 text-blue-700 border-blue-200' },
-              { label: 'Importo diverso',value: summary.importoDiverso, cls: 'bg-orange-50 dark:bg-orange-950/20 text-orange-700 border-orange-200' },
-              { label: 'Non pagate',     value: summary.nonPagate,     cls: 'bg-red-50 dark:bg-red-950/20 text-red-700 border-red-200' },
+              { label: 'Pagate',          value: summary.pagate,         cls: 'bg-green-50 dark:bg-green-950/20 text-green-700 border-green-200' },
+              { label: 'Incerte',         value: summary.perImporto,     cls: 'bg-blue-50 dark:bg-blue-950/20 text-blue-700 border-blue-200' },
+              { label: 'Importo diverso', value: summary.importoDiverso, cls: 'bg-orange-50 dark:bg-orange-950/20 text-orange-700 border-orange-200' },
+              { label: 'Non pagate',      value: summary.nonPagate,      cls: 'bg-red-50 dark:bg-red-950/20 text-red-700 border-red-200' },
             ].map(({ label, value, cls }) => (
               <div key={label} className={cn('rounded-lg border p-3 text-center', cls)}>
                 <div className="text-2xl font-bold">{value}</div>
@@ -430,12 +501,10 @@ export function FatturePagamentiClient() {
                   >
                     <td className="px-3 py-2 font-mono text-xs font-semibold">{riga.fattura.numero}</td>
                     <td className="px-3 py-2 text-xs text-muted-foreground whitespace-nowrap">{riga.fattura.data}</td>
-                    <td className="px-3 py-2 max-w-[150px] truncate text-xs" title={riga.fattura.cliente}>
-                      {riga.fattura.cliente}
-                    </td>
+                    <td className="px-3 py-2 max-w-[150px] truncate text-xs" title={riga.fattura.cliente}>{riga.fattura.cliente}</td>
                     <td className="px-3 py-2 text-right font-medium tabular-nums">{formatEuro(riga.fattura.totale)}</td>
                     <td className="px-3 py-2 text-xs text-muted-foreground whitespace-nowrap">
-                      {riga.movimento?.dataOperazione ?? <span className="text-muted-foreground/50">—</span>}
+                      {riga.movimento?.dataOperazione ?? <span className="opacity-40">—</span>}
                     </td>
                     <td className="px-3 py-2 text-right tabular-nums text-xs">
                       {riga.movimento ? (
@@ -448,15 +517,13 @@ export function FatturePagamentiClient() {
                           )}
                         </>
                       ) : (
-                        <span className="text-muted-foreground/50">—</span>
+                        <span className="opacity-40">—</span>
                       )}
                     </td>
                     <td className="px-3 py-2">
                       <StatoBadge stato={riga.stato} />
                       {riga.tipoMatch === 'importo' && (
-                        <span className="block text-[10px] text-muted-foreground mt-0.5">
-                          match per importo
-                        </span>
+                        <span className="block text-[10px] text-muted-foreground mt-0.5">match per importo</span>
                       )}
                     </td>
                   </tr>
@@ -472,14 +539,12 @@ export function FatturePagamentiClient() {
                 Mostra descrizioni bonifici
               </summary>
               <div className="mt-2 rounded-lg bg-muted/40 p-3 space-y-1.5 font-mono text-[10px] leading-relaxed">
-                {righe
-                  .filter(r => r.movimento)
-                  .map((r, i) => (
-                    <div key={i} className="flex gap-2">
-                      <span className="font-bold text-foreground shrink-0">{r.fattura.numero}:</span>
-                      <span className="text-muted-foreground break-all">{r.movimento!.descrizione}</span>
-                    </div>
-                  ))}
+                {righe.filter(r => r.movimento).map((r, i) => (
+                  <div key={i} className="flex gap-2">
+                    <span className="font-bold text-foreground shrink-0">{r.fattura.numero}:</span>
+                    <span className="text-muted-foreground break-all">{r.movimento!.descrizione}</span>
+                  </div>
+                ))}
               </div>
             </details>
           )}
