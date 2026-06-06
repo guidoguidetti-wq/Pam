@@ -96,5 +96,33 @@ export async function GET(req: NextRequest) {
     }
   })
 
-  return NextResponse.json({ mesiStats, progetti: progettiData })
+  // ── Task urgenti/alti aperti ────────────────────────────────────────────
+  const todoUrgenti = await prisma.todo.findMany({
+    where: {
+      stato: { in: ['APERTA', 'IN_CORSO', 'IN_ATTESA'] },
+      priorita: { in: ['URGENTE', 'ALTA'] },
+    },
+    include: {
+      committente: { select: { ragioneSociale: true } },
+      cliente: { select: { ragioneSociale: true } },
+    },
+    orderBy: [{ priorita: 'asc' }, { scadenza: { sort: 'asc', nulls: 'last' } }, { createdAt: 'desc' }],
+    take: 10,
+  })
+
+  const todoData = todoUrgenti.map((t) => ({
+    id: t.id.toString(),
+    titolo: t.titolo,
+    priorita: t.priorita,
+    stato: t.stato,
+    scadenza: t.scadenza ? t.scadenza.toISOString().split('T')[0] : null,
+    committente: t.committente?.ragioneSociale ?? t.committenteLibero ?? null,
+    cliente: t.cliente?.ragioneSociale ?? t.clienteLibero ?? null,
+  }))
+
+  const todoCount = await prisma.todo.count({
+    where: { stato: { in: ['APERTA', 'IN_CORSO', 'IN_ATTESA'] } },
+  })
+
+  return NextResponse.json({ mesiStats, progetti: progettiData, todoUrgenti: todoData, todoCount })
 }

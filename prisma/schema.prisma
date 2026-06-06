@@ -35,6 +35,20 @@ enum TipoSpesa {
   ALTRO
 }
 
+enum PrioritaTodo {
+  URGENTE
+  ALTA
+  MEDIA
+  BASSA
+}
+
+enum StatoTodo {
+  APERTA
+  IN_CORSO
+  IN_ATTESA
+  CHIUSA
+}
+
 model TipoAttivita {
   id          Int    @id @default(autoincrement()) @db.SmallInt
   codice      String @unique @db.VarChar(10)
@@ -66,6 +80,7 @@ model Committente {
   listino   Listino[]
   progetti  Progetto[]
   attivita  Attivita[]
+  todo      Todo[]
 
   @@map("committente")
 }
@@ -88,6 +103,7 @@ model Cliente {
   listino     Listino[]
   progetti    Progetto[]
   attivita    Attivita[]
+  todo        Todo[]
 
   @@index([committenteId])
   @@map("cliente")
@@ -247,4 +263,29 @@ model Allegato {
   @@index([spesaId])
   @@index([attivitaId])
   @@map("allegato")
+}
+
+// ─── TODO ──────────────────────────────────────────────────
+
+model Todo {
+  id                BigInt       @id @default(autoincrement())
+  titolo            String       @db.VarChar(300)
+  descrizione       String?      @db.Text
+  priorita          PrioritaTodo @default(MEDIA)
+  stato             StatoTodo    @default(APERTA)
+  committenteId     Int?         @map("committente_id")
+  clienteId         Int?         @map("cliente_id")
+  committenteLibero String?      @db.VarChar(200) @map("committente_libero")
+  clienteLibero     String?      @db.VarChar(200) @map("cliente_libero")
+  scadenza          DateTime?    @db.Date
+  note              String?      @db.Text
+  createdAt         DateTime     @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt         DateTime     @updatedAt @map("updated_at") @db.Timestamptz
+
+  committente Committente? @relation(fields: [committenteId], references: [id])
+  cliente     Cliente?     @relation(fields: [clienteId], references: [id])
+
+  @@index([stato, priorita])
+  @@index([committenteId])
+  @@map("todo")
 }

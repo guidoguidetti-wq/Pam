@@ -12,10 +12,11 @@ import {
   Legend,
   ResponsiveContainer,
 } from 'recharts'
-import { Loader2, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Loader2, ChevronLeft, ChevronRight, AlertCircle, Clock, ArrowRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { formatValuta, formatOre } from '@/lib/utils'
 import { cn } from '@/lib/utils'
+import Link from 'next/link'
 
 const MESI = ['Gen', 'Feb', 'Mar', 'Apr', 'Mag', 'Giu', 'Lug', 'Ago', 'Set', 'Ott', 'Nov', 'Dic']
 
@@ -40,9 +41,37 @@ interface Progetto {
   oreErogate: number
 }
 
+interface TodoUrgente {
+  id: string
+  titolo: string
+  priorita: 'URGENTE' | 'ALTA'
+  stato: 'APERTA' | 'IN_CORSO' | 'IN_ATTESA'
+  scadenza: string | null
+  committente: string | null
+  cliente: string | null
+}
+
 interface DashboardData {
   mesiStats: MeseStats[]
   progetti: Progetto[]
+  todoUrgenti: TodoUrgente[]
+  todoCount: number
+}
+
+const PRIORITA_BADGE = {
+  URGENTE: 'bg-red-100 text-red-700 border-red-200',
+  ALTA: 'bg-orange-100 text-orange-700 border-orange-200',
+}
+
+const STATO_LABEL: Record<string, string> = {
+  APERTA: 'Aperta',
+  IN_CORSO: 'In corso',
+  IN_ATTESA: 'In attesa',
+}
+
+function isScaduta(scadenza: string | null) {
+  if (!scadenza) return false
+  return new Date(scadenza + 'T00:00:00') < new Date(new Date().toDateString())
 }
 
 function formatOreDecimal(ore: number): string {
@@ -166,6 +195,61 @@ export default function DashboardClient() {
               <p className="text-xl font-bold tabular-nums">{formatValuta(totSpese)}</p>
             </div>
           </div>
+
+          {/* Widget task urgenti */}
+          {(data?.todoUrgenti ?? []).length > 0 && (
+            <div className="rounded-lg border bg-card overflow-hidden">
+              <div className="flex items-center justify-between px-4 py-2.5 border-b bg-red-50 dark:bg-red-950/20">
+                <div className="flex items-center gap-2">
+                  <AlertCircle className="h-4 w-4 text-red-500" />
+                  <h2 className="text-sm font-semibold text-red-700 dark:text-red-400">
+                    Task urgenti / alta priorità
+                  </h2>
+                  {(data?.todoCount ?? 0) > 0 && (
+                    <span className="text-xs bg-red-100 dark:bg-red-900/40 text-red-600 dark:text-red-300 px-1.5 py-0.5 rounded-full font-medium">
+                      {data?.todoCount} aperti
+                    </span>
+                  )}
+                </div>
+                <Link href="/todo" className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors">
+                  Tutti <ArrowRight className="h-3 w-3" />
+                </Link>
+              </div>
+              <div className="divide-y">
+                {(data?.todoUrgenti ?? []).map((t) => {
+                  const scaduta = isScaduta(t.scadenza)
+                  return (
+                    <div key={t.id} className="px-4 py-2.5 flex items-start gap-3">
+                      <span className={cn(
+                        'shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded border mt-0.5',
+                        PRIORITA_BADGE[t.priorita]
+                      )}>
+                        {t.priorita === 'URGENTE' ? '🔴' : '🟠'} {t.priorita}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-medium truncate">{t.titolo}</p>
+                        <div className="flex items-center gap-2 flex-wrap mt-0.5">
+                          {t.committente && (
+                            <span className="text-xs text-muted-foreground truncate">
+                              {t.committente}{t.cliente ? ` › ${t.cliente}` : ''}
+                            </span>
+                          )}
+                          <span className="text-xs text-muted-foreground">{STATO_LABEL[t.stato]}</span>
+                          {t.scadenza && (
+                            <span className={cn('flex items-center gap-0.5 text-xs', scaduta ? 'text-red-600 font-medium' : 'text-muted-foreground')}>
+                              <Clock className="h-3 w-3" />
+                              {new Date(t.scadenza + 'T00:00:00').toLocaleDateString('it-IT', { day: '2-digit', month: 'short' })}
+                              {scaduta && ' — scaduta!'}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
 
           {/* Grafico mensile */}
           <div className="rounded-lg border bg-card p-4">
