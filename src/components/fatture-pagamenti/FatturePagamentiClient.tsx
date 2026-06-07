@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useState } from 'react'
+import { useRef, useState, useEffect } from 'react'
 import * as XLSX from 'xlsx'
 import { FileText, CreditCard, Upload, X, CheckCircle2, BarChart3, Download, Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -151,7 +151,7 @@ function StatoBadge({ stato }: { stato: StatoRiconciliazione }) {
 
 // ─── Upload zone ──────────────────────────────────────────────────────────────
 
-function UploadZone({ label, description, accept, color, icon: Icon, file, retained, onFile, onClear }: {
+function UploadZone({ label, description, accept, color, icon: Icon, file, retained, onFile, onClear, onClearRetained }: {
   label: string
   description: string
   accept: string
@@ -161,6 +161,7 @@ function UploadZone({ label, description, accept, color, icon: Icon, file, retai
   retained: ParsedDataset | null
   onFile: (f: File) => void
   onClear: () => void
+  onClearRetained: () => void
 }) {
   const inputRef = useRef<HTMLInputElement>(null)
   const [dragging, setDragging] = useState(false)
@@ -222,9 +223,18 @@ function UploadZone({ label, description, accept, color, icon: Icon, file, retai
               <p className="text-xs text-muted-foreground">Ultimo: {retained!.filename}</p>
               <p className="text-xs font-medium text-primary">{retained!.count} righe disponibili</p>
             </div>
-            <div className="flex items-center gap-1.5 text-xs text-muted-foreground mt-0.5">
-              <Upload className="h-3 w-3" />
-              <span>Clicca per aggiornare</span>
+            <div className="flex items-center gap-3 mt-0.5">
+              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <Upload className="h-3 w-3" />
+                <span>Clicca per aggiornare</span>
+              </div>
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); onClearRetained() }}
+                className="flex items-center gap-1 text-xs text-destructive hover:underline"
+              >
+                <X className="h-3 w-3" /> Svuota
+              </button>
             </div>
           </>
         ) : (
@@ -247,13 +257,16 @@ function UploadZone({ label, description, accept, color, icon: Icon, file, retai
   )
 }
 
+const LS_FATTURE   = 'pam_fp_fatture'
+const LS_MOVIMENTI = 'pam_fp_movimenti'
+
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
 export function FatturePagamentiClient() {
   const [fattureFile, setFattureFile]     = useState<File | null>(null)
   const [pagamentiFile, setPagamentiFile] = useState<File | null>(null)
 
-  // Parsed datasets survive file removal
+  // Parsed datasets survive file removal and page reload (localStorage)
   const [parsedFatture,   setParsedFatture]   = useState<{ rows: Fattura[];   info: ParsedDataset } | null>(null)
   const [parsedMovimenti, setParsedMovimenti] = useState<{ rows: Movimento[]; info: ParsedDataset } | null>(null)
 
@@ -262,6 +275,27 @@ export function FatturePagamentiClient() {
   const [pdfLoading,  setPdfLoading]  = useState(false)
   const [error,       setError]       = useState<string | null>(null)
   const [parseError,  setParseError]  = useState<{ fat?: string; pag?: string }>({})
+
+  // Restore from localStorage on mount
+  useEffect(() => {
+    try {
+      const f = localStorage.getItem(LS_FATTURE)
+      if (f) setParsedFatture(JSON.parse(f))
+      const m = localStorage.getItem(LS_MOVIMENTI)
+      if (m) setParsedMovimenti(JSON.parse(m))
+    } catch { /* ignore */ }
+  }, [])
+
+  // Persist to localStorage on change
+  useEffect(() => {
+    if (parsedFatture) localStorage.setItem(LS_FATTURE, JSON.stringify(parsedFatture))
+    else localStorage.removeItem(LS_FATTURE)
+  }, [parsedFatture])
+
+  useEffect(() => {
+    if (parsedMovimenti) localStorage.setItem(LS_MOVIMENTI, JSON.stringify(parsedMovimenti))
+    else localStorage.removeItem(LS_MOVIMENTI)
+  }, [parsedMovimenti])
 
   async function handleFattureFile(f: File) {
     setFattureFile(f)
@@ -350,7 +384,7 @@ export function FatturePagamentiClient() {
     <div className="space-y-6 max-w-5xl">
       <p className="text-sm text-muted-foreground">
         Carica le fatture emesse e i movimenti bancari per verificare quali fatture sono state pagate.
-        I dati rimangono disponibili anche dopo aver rimosso il file.
+        I dati vengono memorizzati localmente: al prossimo accesso puoi riconciliare direttamente senza ricaricare i file.
       </p>
 
       {/* Upload zones */}
@@ -366,6 +400,7 @@ export function FatturePagamentiClient() {
             retained={parsedFatture?.info ?? null}
             onFile={handleFattureFile}
             onClear={() => { setFattureFile(null); setRighe(null) }}
+            onClearRetained={() => { setFattureFile(null); setParsedFatture(null); setRighe(null) }}
           />
           {parseError.fat && (
             <p className="text-xs text-destructive px-1">{parseError.fat}</p>
@@ -382,6 +417,7 @@ export function FatturePagamentiClient() {
             retained={parsedMovimenti?.info ?? null}
             onFile={handlePagamentiFile}
             onClear={() => { setPagamentiFile(null); setRighe(null) }}
+            onClearRetained={() => { setPagamentiFile(null); setParsedMovimenti(null); setRighe(null) }}
           />
           {parseError.pag && (
             <p className="text-xs text-destructive px-1">{parseError.pag}</p>
