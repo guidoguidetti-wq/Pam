@@ -252,9 +252,9 @@ export default function TodoDialog({ open, onOpenChange, todo, committenti, clie
 
             {committenteMode === 'esistente' ? (
               <Select
-                value={watch('committenteId') ?? ''}
+                value={watch('committenteId') || '__none__'}
                 onValueChange={(v) => {
-                  setValue('committenteId', v)
+                  setValue('committenteId', v === '__none__' ? '' : v)
                   setValue('clienteId', '')
                 }}
               >
@@ -262,7 +262,7 @@ export default function TodoDialog({ open, onOpenChange, todo, committenti, clie
                   <SelectValue placeholder="Seleziona committente..." />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">— nessuno —</SelectItem>
+                  <SelectItem value="__none__">— nessuno —</SelectItem>
                   {committenti.map((c) => (
                     <SelectItem key={c.id} value={c.id.toString()}>{c.ragioneSociale}</SelectItem>
                   ))}
@@ -304,14 +304,14 @@ export default function TodoDialog({ open, onOpenChange, todo, committenti, clie
 
             {clienteMode === 'esistente' && (
               <Select
-                value={watch('clienteId') ?? ''}
-                onValueChange={(v) => setValue('clienteId', v)}
+                value={watch('clienteId') || '__none__'}
+                onValueChange={(v) => setValue('clienteId', v === '__none__' ? '' : v)}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Seleziona cliente..." />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">— nessuno —</SelectItem>
+                  <SelectItem value="__none__">— nessuno —</SelectItem>
                   {filteredClienti.map((c) => (
                     <SelectItem key={c.id} value={c.id.toString()}>{c.ragioneSociale}</SelectItem>
                   ))}
