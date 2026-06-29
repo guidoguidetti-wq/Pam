@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
-import { Upload, FileText, Pencil, Check, X } from 'lucide-react'
+import { Upload, FileText, Pencil, Check, X, Building2, Trash2 } from 'lucide-react'
 import Link from 'next/link'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
@@ -107,6 +107,21 @@ export function ContiBancaClient() {
     return `/api/conti-banca/report?${p}`
   }
 
+  async function resetImport() {
+    if (!confirm('Eliminare TUTTI i movimenti bancari e gli enti associati? Operazione irreversibile.')) return
+    try {
+      const url = contoId !== 'all' ? `/api/conti-banca/reset?contoId=${contoId}` : '/api/conti-banca/reset'
+      const res = await fetch(url, { method: 'DELETE' })
+      const data = await res.json()
+      if (!res.ok) throw new Error()
+      toast.success(`Eliminati ${data.deleted} movimenti e ${data.entiRemoved} enti`)
+      setMovimenti([])
+      setEnti([])
+    } catch {
+      toast.error('Errore durante il reset')
+    }
+  }
+
   return (
     <div className="space-y-4">
       {/* Toolbar */}
@@ -146,16 +161,22 @@ export function ContiBancaClient() {
           </Button>
         </div>
 
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           <a href={reportUrl('data')} target="_blank" rel="noopener noreferrer">
             <Button size="sm" variant="outline"><FileText className="h-4 w-4 mr-1" />PDF per Data</Button>
           </a>
           <a href={reportUrl('ente')} target="_blank" rel="noopener noreferrer">
             <Button size="sm" variant="outline"><FileText className="h-4 w-4 mr-1" />PDF per Ente</Button>
           </a>
+          <Link href="/conti-banca/enti">
+            <Button size="sm" variant="outline"><Building2 className="h-4 w-4 mr-1" />Gestione Enti</Button>
+          </Link>
           <Link href="/conti-banca/import">
             <Button size="sm"><Upload className="h-4 w-4 mr-1" />Importa Excel</Button>
           </Link>
+          <Button size="sm" variant="destructive" onClick={resetImport}>
+            <Trash2 className="h-4 w-4 mr-1" />Reset
+          </Button>
         </div>
       </div>
 
