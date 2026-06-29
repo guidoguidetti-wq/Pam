@@ -265,6 +265,58 @@ model Allegato {
   @@map("allegato")
 }
 
+// ─── CONTI BANCA ───────────────────────────────────────────
+
+model Ente {
+  id        Int      @id @default(autoincrement())
+  nome      String   @db.VarChar(200)
+  nomeNorm  String   @db.VarChar(200) @map("nome_norm")
+  categoria String?  @db.VarChar(100)
+  note      String?  @db.Text
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  movimenti MovimentoBancario[]
+
+  @@unique([nomeNorm])
+  @@map("ente")
+}
+
+model ContoBanca {
+  id           Int      @id @default(autoincrement())
+  banca        String   @db.VarChar(100)
+  numeroConto  String   @db.VarChar(50) @map("numero_conto")
+  iban         String?  @db.VarChar(34)
+  intestatario String?  @db.VarChar(200)
+  attivo       Boolean  @default(true)
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  movimenti MovimentoBancario[]
+
+  @@map("conto_banca")
+}
+
+model MovimentoBancario {
+  id             BigInt    @id @default(autoincrement())
+  contoId        Int       @map("conto_id")
+  dataOperazione DateTime  @db.Date @map("data_operazione")
+  dataValuta     DateTime? @db.Date @map("data_valuta")
+  descrizione    String    @db.Text
+  enteId         Int?      @map("ente_id")
+  importo        Decimal   @db.Decimal(12, 2)
+  categoria      String?   @db.VarChar(50)
+  stato          String?   @db.VarChar(30)
+  hash           String    @db.VarChar(64) @map("hash")
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  conto ContoBanca @relation(fields: [contoId], references: [id])
+  ente  Ente?      @relation(fields: [enteId], references: [id])
+
+  @@unique([contoId, hash])
+  @@index([dataOperazione])
+  @@index([enteId])
+  @@map("movimento_bancario")
+}
+
 // ─── TODO ──────────────────────────────────────────────────
 
 model Todo {
