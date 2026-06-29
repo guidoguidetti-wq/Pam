@@ -10,7 +10,7 @@ export async function GET(_req: NextRequest) {
   try {
     const enti = await prisma.ente.findMany({
       orderBy: { nome: 'asc' },
-      select: { id: true, nome: true, categoria: true, _count: { select: { movimenti: true } } },
+      select: { id: true, nome: true, categoria: true, note: true, _count: { select: { movimenti: true } } },
     })
     return NextResponse.json(enti)
   } catch (err) {
@@ -19,7 +19,11 @@ export async function GET(_req: NextRequest) {
   }
 }
 
-const updateSchema = z.object({ nome: z.string().min(1).max(200), categoria: z.string().max(100).optional().nullable() })
+const updateSchema = z.object({
+  nome: z.string().min(1).max(200),
+  categoria: z.string().max(100).optional().nullable(),
+  note: z.string().optional().nullable(),
+})
 
 export async function PUT(req: NextRequest) {
   const session = await auth()
@@ -36,7 +40,7 @@ export async function PUT(req: NextRequest) {
   try {
     const ente = await prisma.ente.update({
       where: { id },
-      data: { nome: parsed.data.nome, nomeNorm: parsed.data.nome.toUpperCase().trim(), categoria: parsed.data.categoria ?? null },
+      data: { nome: parsed.data.nome, nomeNorm: parsed.data.nome.toUpperCase().trim(), categoria: parsed.data.categoria ?? null, note: parsed.data.note ?? null },
     })
     return NextResponse.json(ente)
   } catch (err) {

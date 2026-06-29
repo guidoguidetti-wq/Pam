@@ -25,7 +25,7 @@ export function extractEnteRegex(descrizione: string): string {
     const m = desc.match(/^CANONE\s+SERVIZIO\s+(.+?)(?:\s{2,}|\s+-\s+UTENTE)/i)
     return m ? 'CANONE ' + m[1].trim() : desc.substring(0, 50)
   }
-  const bonificoMatch = desc.match(/(?:BONIFICO|EMOLUMENTI)\s+o\/c:\s+(.+?)\s{2,}/i)
+  const bonificoMatch = desc.match(/(?:BONIFICO(?:\s+ISTANTANEO)?|EMOLUMENTI)\s+o\/c:\s+(.+?)\s{2,}/i)
   if (bonificoMatch) return bonificoMatch[1].trim()
   const addebitoMatch = desc.match(/^(?:ADDEBITO SDD|COMMISSIONI)\s+(.+?)\s{2,}/i)
   if (addebitoMatch) return addebitoMatch[1].trim()
@@ -58,28 +58,63 @@ export function normalizeEnte(nome: string): string {
   return nome.toUpperCase().replace(/\s+/g, ' ').trim()
 }
 
+// Regole deterministiche applicate PRIMA dell'AI — restituisce il nome ente o null se l'AI deve gestirlo
+export function preProcessDescription(desc: string): string | null {
+  // Raggruppamenti fissi (un unico ente per tutte le occorrenze)
+  if (/^COMMISSIONI BONIFICI/i.test(desc)) return 'Commissioni Bonifici'
+  if (/^IMPOSTA DI BOLLO/i.test(desc)) return 'Imposta di Bollo'
+  if (/^PAGAM\.\s*DELEGA\s*F24/i.test(desc)) return 'F24 Agenzia Entrate'
+  if (/^PAGAMENTO PAGOPA/i.test(desc)) return 'PagoPA'
+  if (/^PENSIONE\s+PENSIONE\s+INPS/i.test(desc)) return 'INPS Pensione'
+  if (/^SPESE\s+SU\s+PRELIEVO\s+ATM/i.test(desc)) return 'Spese Prelievo ATM'
+  if (/^COMPETENZE\s+SPESE\s+ED\s+ONERI/i.test(desc)) return 'Competenze Spese ed Oneri'
+  if (/^COMMISSIONE\s+TELEPASS/i.test(desc)) return 'Telepass'
+  if (/^PEDAGGIO\s+AUTOSTRADE/i.test(desc)) return 'Telepass'
+
+  // "DISPOSIZIONE a favore di NOME EUR importo..." — ferma a EUR (bug fix: prima si fermava a $)
+  const dispMatch = desc.match(/^DISPOSIZIONE\s+a\s+favore\s+di\s+(.+?)\s+EUR\b/i)
+  if (dispMatch) return dispMatch[1].trim()
+
+  // "BONIFICO ISTANTANEO o/c: NOME  ABI-CAB:..."
+  const bonInstMatch = desc.match(/^BONIFICO\s+ISTANTANEO\s+o\/c:\s+(.+?)\s{2,}/i)
+  if (bonInstMatch) return bonInstMatch[1].trim()
+
+  return null
+}
+
 // AI batch extractor — sends up to 50 descriptions per call
 export async function extractEntiBatch(descriptions: string[]): Promise<string[]> {
   const apiKey = process.env.ANTHROPIC_API_KEY
-  if (!apiKey) {
-    return descriptions.map(extractEnteRegex)
-  }
 
-  const client = new Anthropic({ apiKey })
-  const BATCH = 50
-  const results: string[] = []
+  // Apply deterministic pre-processing first
+  const preProcessed = descriptions.map(d => preProcessDescription(d))
 
-  for (let i = 0; i < descriptions.length; i += BATCH) {
-    const chunk = descriptions.slice(i, i + BATCH)
-    const numbered = chunk.map((d, idx) => `${idx + 1}. ${d}`).join('\n')
+  // Collect only descriptions that need AI (pre-processing returned null)
+  const needsAI: { idx: number; desc: string }[] = []
+  preProcessed.forEach((result, idx) => {
+    if (result === null) needsAI.push({ idx, desc: descriptions[idx] })
+  })
 
-    const response = await client.messages.create({
-      model: 'claude-haiku-4-5-20251001',
-      max_tokens: 1024,
-      messages: [
-        {
-          role: 'user',
-          content: `Sei un parser di movimenti bancari italiani. Per ogni descrizione qui sotto, estrai SOLO il nome del beneficiario/commerciante/ente.
+  // If no API key or nothing needs AI, use regex fallback for remaining
+  const aiResults: Record<number, string> = {}
+  if (!apiKey || needsAI.length === 0) {
+    needsAI.forEach(({ idx, desc }) => { aiResults[idx] = extractEnteRegex(desc) })
+  } else {
+    const client = new Anthropic({ apiKey })
+    const BATCH = 50
+
+    for (let i = 0; i < needsAI.length; i += BATCH) {
+      const chunk = needsAI.slice(i, i + BATCH)
+      const numbered = chunk.map((item, j) => `${j + 1}. ${item.desc}`).join('\n')
+
+      try {
+        const response = await client.messages.create({
+          model: 'claude-haiku-4-5-20251001',
+          max_tokens: 1024,
+          messages: [
+            {
+              role: 'user',
+              content: `Sei un parser di movimenti bancari italiani. Per ogni descrizione qui sotto, estrai SOLO il nome del beneficiario/commerciante/ente.
 
 Regole:
 - Restituisci SOLO il nome (no città, no date, no numeri carta, no importi, no "Operazione carta", no "ITA")
@@ -97,23 +132,25 @@ Rispondi con un array JSON di stringhe, uno per descrizione, nell'ESATTO stesso 
 
 Descrizioni:
 ${numbered}`,
-        },
-      ],
-    })
+            },
+          ],
+        })
 
-    const text = response.content[0].type === 'text' ? response.content[0].text.trim() : ''
+        const text = response.content[0].type === 'text' ? response.content[0].text.trim() : ''
+        const jsonMatch = text.match(/\[[\s\S]*\]/)
+        if (!jsonMatch) throw new Error('no JSON array found')
+        const parsed: string[] = JSON.parse(jsonMatch[0])
+        if (parsed.length !== chunk.length) throw new Error('length mismatch')
 
-    try {
-      const jsonMatch = text.match(/\[[\s\S]*\]/)
-      if (!jsonMatch) throw new Error('no JSON array found')
-      const parsed: string[] = JSON.parse(jsonMatch[0])
-      if (parsed.length !== chunk.length) throw new Error('length mismatch')
-      results.push(...parsed.map(n => (n ?? '').trim() || extractEnteRegex(chunk[parsed.indexOf(n)])))
-    } catch {
-      // Fallback to regex for this chunk
-      results.push(...chunk.map(extractEnteRegex))
+        chunk.forEach((item, j) => {
+          aiResults[item.idx] = (parsed[j] ?? '').trim() || extractEnteRegex(item.desc)
+        })
+      } catch {
+        chunk.forEach(({ idx, desc }) => { aiResults[idx] = extractEnteRegex(desc) })
+      }
     }
   }
 
-  return results
+  // Merge pre-processed + AI results
+  return descriptions.map((desc, idx) => preProcessed[idx] ?? aiResults[idx] ?? extractEnteRegex(desc))
 }
