@@ -38,7 +38,7 @@ export function extractEnte(descrizione: string): string {
   if (addebitoMatch) return addebitoMatch[1].trim()
 
   // Remove "Sum*" prefix
-  let cleaned = desc.replace(/^Sum\*/, '')
+  const cleaned = desc.replace(/^Sum\*/, '')
 
   // Carta con ITA marker: "NAME CITY [POSTAL] ITA Operazione..."
   const itaIdx = cleaned.search(/\s+ITA\s/i)

@@ -48,8 +48,6 @@ export function ContiBancaClient() {
   const [contoId, setContoId] = useState<string>('all')
   const [tipo, setTipo] = useState<string>('all')
 
-  // Report
-  const [ordinamento, setOrdinamento] = useState<'data' | 'ente'>('data')
 
   // Inline ente edit
   const [editEnteId, setEditEnteId] = useState<number | null>(null)
