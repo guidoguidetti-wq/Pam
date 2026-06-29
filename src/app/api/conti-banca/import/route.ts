@@ -97,7 +97,7 @@ export async function POST(req: NextRequest) {
       imported++
     }
 
-    return NextResponse.json({ imported, skipped, contoId: conto.id })
+    return NextResponse.json({ imported, skipped, contoId: Number(conto.id) })
   } catch (err) {
     console.error('[import-banca]', err)
     return NextResponse.json({ error: 'Errore interno' }, { status: 500 })

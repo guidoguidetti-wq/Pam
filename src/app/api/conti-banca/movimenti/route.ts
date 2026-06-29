@@ -36,7 +36,15 @@ export async function GET(req: NextRequest) {
       take: 1000,
     })
 
-    return NextResponse.json(movimenti)
+    const serialized = movimenti.map(m => ({
+      ...m,
+      id: Number(m.id),
+      importo: Number(m.importo),
+      dataOperazione: m.dataOperazione.toISOString().slice(0, 10),
+      dataValuta: m.dataValuta ? m.dataValuta.toISOString().slice(0, 10) : null,
+    }))
+
+    return NextResponse.json(serialized)
   } catch (err) {
     console.error('[movimenti-banca]', err)
     return NextResponse.json({ error: 'Errore interno' }, { status: 500 })
