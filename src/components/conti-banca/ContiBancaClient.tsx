@@ -20,7 +20,7 @@ type Movimento = {
   importo: number
   categoria: string | null
   stato: string | null
-  ente: { id: number; nome: string } | null
+  ente: { id: number; nome: string; categoria: string | null } | null
   conto: { id: number; banca: string; numeroConto: string }
 }
 
@@ -47,11 +47,14 @@ export function ContiBancaClient() {
   const [enteId, setEnteId] = useState<string>('all')
   const [contoId, setContoId] = useState<string>('all')
   const [tipo, setTipo] = useState<string>('all')
+  const [categoriaEnte, setCategoriaEnte] = useState<string>('all')
 
 
   // Inline ente edit
   const [editEnteId, setEditEnteId] = useState<number | null>(null)
   const [editNome, setEditNome] = useState('')
+
+  const categorieEnti = Array.from(new Set(enti.map(e => e.categoria).filter(Boolean) as string[])).sort()
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -62,6 +65,7 @@ export function ContiBancaClient() {
       if (enteId !== 'all') params.set('enteId', enteId)
       if (contoId !== 'all') params.set('contoId', contoId)
       if (tipo !== 'all') params.set('tipo', tipo)
+      if (categoriaEnte !== 'all') params.set('categoriaEnte', categoriaEnte)
 
       const res = await fetch(`/api/conti-banca/movimenti?${params}`)
       if (!res.ok) throw new Error()
@@ -71,7 +75,7 @@ export function ContiBancaClient() {
     } finally {
       setLoading(false)
     }
-  }, [da, a, enteId, contoId, tipo])
+  }, [da, a, enteId, contoId, tipo, categoriaEnte])
 
   useEffect(() => {
     fetch('/api/conti-banca/enti').then(r => r.json()).then(setEnti).catch(() => null)
@@ -156,6 +160,14 @@ export function ContiBancaClient() {
             </SelectContent>
           </Select>
 
+          <Select value={categoriaEnte} onValueChange={setCategoriaEnte}>
+            <SelectTrigger className="w-44 h-8 text-sm"><SelectValue placeholder="Cat. ente" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Tutte le categorie</SelectItem>
+              {categorieEnti.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+            </SelectContent>
+          </Select>
+
           <Button size="sm" onClick={load} disabled={loading}>
             {loading ? 'Carico…' : 'Applica'}
           </Button>
@@ -205,6 +217,7 @@ export function ContiBancaClient() {
             <tr>
               <th className="px-3 py-2 text-left">Data Op.</th>
               <th className="px-3 py-2 text-left">Ente</th>
+              <th className="px-3 py-2 text-left">Cat. Ente</th>
               <th className="px-3 py-2 text-left">Descrizione</th>
               <th className="px-3 py-2 text-left">Categoria</th>
               <th className="px-3 py-2 text-right">Importo</th>
@@ -213,7 +226,7 @@ export function ContiBancaClient() {
           </thead>
           <tbody className="divide-y">
             {movimenti.length === 0 && (
-              <tr><td colSpan={6} className="px-3 py-8 text-center text-muted-foreground">{loading ? 'Caricamento…' : 'Nessun movimento trovato'}</td></tr>
+              <tr><td colSpan={7} className="px-3 py-8 text-center text-muted-foreground">{loading ? 'Caricamento…' : 'Nessun movimento trovato'}</td></tr>
             )}
             {movimenti.map(m => (
               <tr key={m.id} className="hover:bg-muted/30 transition-colors">
@@ -238,6 +251,11 @@ export function ContiBancaClient() {
                       )}
                     </div>
                   )}
+                </td>
+                <td className="px-3 py-1.5">
+                  {m.ente?.categoria
+                    ? <Badge variant="outline" className="text-[10px]">{m.ente.categoria}</Badge>
+                    : <span className="text-xs text-muted-foreground">—</span>}
                 </td>
                 <td className="px-3 py-1.5 max-w-xs">
                   <span className="text-xs text-muted-foreground line-clamp-2" title={m.descrizione}>{m.descrizione}</span>

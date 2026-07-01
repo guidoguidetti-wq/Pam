@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
-import { Pencil, Check, X, Search, ChevronDown, ChevronUp } from 'lucide-react'
+import { Pencil, Check, X, Search } from 'lucide-react'
 import { toast } from 'sonner'
 
 type Ente = {
@@ -28,7 +28,6 @@ export function EntiClient() {
   const [search, setSearch] = useState('')
   const [editId, setEditId] = useState<number | null>(null)
   const [edit, setEdit] = useState<EditState>({ nome: '', categoria: '', note: '' })
-  const [expanded, setExpanded] = useState<Set<number>>(new Set())
 
   useEffect(() => {
     fetch('/api/conti-banca/enti')
@@ -46,7 +45,6 @@ export function EntiClient() {
   function startEdit(e: Ente) {
     setEditId(e.id)
     setEdit({ nome: e.nome, categoria: e.categoria ?? '', note: e.note ?? '' })
-    setExpanded(prev => new Set([...prev, e.id]))
   }
 
   function cancelEdit() {
@@ -78,18 +76,9 @@ export function EntiClient() {
     }
   }
 
-  function toggleExpand(id: number) {
-    setExpanded(prev => {
-      const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
-      return next
-    })
-  }
-
   return (
-    <div className="space-y-4 max-w-2xl">
-      <div className="relative">
+    <div className="space-y-4">
+      <div className="relative max-w-sm">
         <Search className="absolute left-2.5 top-2 h-4 w-4 text-muted-foreground" />
         <Input
           placeholder="Cerca ente, categoria o note…"
@@ -101,116 +90,110 @@ export function EntiClient() {
 
       <div className="text-xs text-muted-foreground">{filtered.length} enti</div>
 
-      <div className="rounded-lg border divide-y">
-        {loading && (
-          <div className="px-4 py-8 text-center text-sm text-muted-foreground">Caricamento…</div>
-        )}
-        {!loading && filtered.length === 0 && (
-          <div className="px-4 py-8 text-center text-sm text-muted-foreground">Nessun ente trovato</div>
-        )}
+      <div className="rounded-lg border overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead className="bg-muted/50 text-xs uppercase tracking-wide">
+            <tr>
+              <th className="px-3 py-2 text-left">Nome</th>
+              <th className="px-3 py-2 text-left">Categoria</th>
+              <th className="px-3 py-2 text-left">Note</th>
+              <th className="px-3 py-2 text-right">Mov.</th>
+              <th className="px-3 py-2 w-16"></th>
+            </tr>
+          </thead>
+          <tbody className="divide-y">
+            {loading && (
+              <tr><td colSpan={5} className="px-3 py-8 text-center text-muted-foreground">Caricamento…</td></tr>
+            )}
+            {!loading && filtered.length === 0 && (
+              <tr><td colSpan={5} className="px-3 py-8 text-center text-muted-foreground">Nessun ente trovato</td></tr>
+            )}
+            {filtered.map(e => {
+              const isEditing = editId === e.id
+              return (
+                <tr key={e.id} className={isEditing ? 'bg-muted/20' : 'hover:bg-muted/30 transition-colors'}>
+                  {/* Nome */}
+                  <td className="px-3 py-2 min-w-[180px]">
+                    {isEditing ? (
+                      <Input
+                        value={edit.nome}
+                        onChange={ev => setEdit(s => ({ ...s, nome: ev.target.value }))}
+                        placeholder="Nome ente"
+                        className="h-7 text-sm"
+                        onKeyDown={ev => { if (ev.key === 'Enter') saveEdit(e.id); if (ev.key === 'Escape') cancelEdit() }}
+                        autoFocus
+                      />
+                    ) : (
+                      <span className="font-medium">{e.nome}</span>
+                    )}
+                  </td>
 
-        {filtered.map(e => {
-          const isEditing = editId === e.id
-          const isExpanded = expanded.has(e.id)
+                  {/* Categoria */}
+                  <td className="px-3 py-2 min-w-[150px]">
+                    {isEditing ? (
+                      <Input
+                        value={edit.categoria}
+                        onChange={ev => setEdit(s => ({ ...s, categoria: ev.target.value }))}
+                        placeholder="Es. Utenze, Alimentari…"
+                        className="h-7 text-sm"
+                        onKeyDown={ev => { if (ev.key === 'Escape') cancelEdit() }}
+                      />
+                    ) : (
+                      e.categoria
+                        ? <Badge variant="outline" className="text-[10px]">{e.categoria}</Badge>
+                        : <span className="text-xs text-muted-foreground">—</span>
+                    )}
+                  </td>
 
-          return (
-            <div key={e.id} className="px-4 py-2.5">
-              {/* Header row */}
-              <div className="flex items-center gap-2">
-                <button
-                  className="text-muted-foreground hover:text-foreground transition-colors shrink-0"
-                  onClick={() => toggleExpand(e.id)}
-                  title={isExpanded ? 'Comprimi' : 'Espandi'}
-                >
-                  {isExpanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
-                </button>
+                  {/* Note */}
+                  <td className="px-3 py-2 max-w-xs">
+                    {isEditing ? (
+                      <Textarea
+                        value={edit.note}
+                        onChange={(ev: React.ChangeEvent<HTMLTextAreaElement>) => setEdit(s => ({ ...s, note: ev.target.value }))}
+                        placeholder="Note aggiuntive…"
+                        className="text-sm min-h-[56px] resize-none"
+                        rows={2}
+                      />
+                    ) : (
+                      <span className="text-xs text-muted-foreground line-clamp-2" title={e.note ?? undefined}>
+                        {e.note ?? '—'}
+                      </span>
+                    )}
+                  </td>
 
-                {isEditing ? (
-                  <Input
-                    value={edit.nome}
-                    onChange={ev => setEdit(s => ({ ...s, nome: ev.target.value }))}
-                    placeholder="Nome ente"
-                    className="h-7 text-sm flex-1"
-                    onKeyDown={ev => { if (ev.key === 'Enter') saveEdit(e.id); if (ev.key === 'Escape') cancelEdit() }}
-                    autoFocus
-                  />
-                ) : (
-                  <span className="text-sm font-medium flex-1 truncate">{e.nome}</span>
-                )}
+                  {/* Movimenti */}
+                  <td className="px-3 py-2 text-right text-xs text-muted-foreground whitespace-nowrap">
+                    {e._count.movimenti}
+                  </td>
 
-                <span className="text-xs text-muted-foreground shrink-0">{e._count.movimenti} mov.</span>
-
-                {isEditing ? (
-                  <>
-                    <button onClick={() => saveEdit(e.id)} className="text-green-600 hover:text-green-700 shrink-0">
-                      <Check className="h-4 w-4" />
-                    </button>
-                    <button onClick={cancelEdit} className="text-muted-foreground hover:text-foreground shrink-0">
-                      <X className="h-4 w-4" />
-                    </button>
-                  </>
-                ) : (
-                  <button
-                    onClick={() => startEdit(e)}
-                    className="text-muted-foreground hover:text-foreground transition-colors shrink-0"
-                  >
-                    <Pencil className="h-3.5 w-3.5" />
-                  </button>
-                )}
-              </div>
-
-              {/* Expanded detail: categoria + note */}
-              {(isEditing || isExpanded) && (
-                <div className="mt-2 ml-6 space-y-2">
-                  {isEditing ? (
-                    <>
-                      <div>
-                        <label className="text-xs text-muted-foreground mb-1 block">Categoria</label>
-                        <Input
-                          value={edit.categoria}
-                          onChange={ev => setEdit(s => ({ ...s, categoria: ev.target.value }))}
-                          placeholder="Es. Utenze, Alimentari, Trasporti…"
-                          className="h-7 text-sm"
-                        />
+                  {/* Azioni */}
+                  <td className="px-3 py-2 text-center">
+                    {isEditing ? (
+                      <div className="flex justify-center gap-2">
+                        <Button size="sm" variant="ghost" className="h-6 px-2 text-green-600 hover:text-green-700" onClick={() => saveEdit(e.id)}>
+                          <Check className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button size="sm" variant="ghost" className="h-6 px-2 text-muted-foreground" onClick={cancelEdit}>
+                          <X className="h-3.5 w-3.5" />
+                        </Button>
                       </div>
-                      <div>
-                        <label className="text-xs text-muted-foreground mb-1 block">Note</label>
-                        <Textarea
-                          value={edit.note}
-                          onChange={(ev: React.ChangeEvent<HTMLTextAreaElement>) => setEdit(s => ({ ...s, note: ev.target.value }))}
-                          placeholder="Note aggiuntive…"
-                          className="text-sm min-h-[60px] resize-none"
-                          rows={2}
-                        />
-                      </div>
-                      <Button size="sm" onClick={() => saveEdit(e.id)} className="h-7 text-xs">
-                        Salva
+                    ) : (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-6 px-2 text-muted-foreground hover:text-foreground"
+                        onClick={() => startEdit(e)}
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
                       </Button>
-                    </>
-                  ) : (
-                    <div className="space-y-1">
-                      {e.categoria && (
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-xs text-muted-foreground w-16">Categoria:</span>
-                          <Badge variant="outline" className="text-[10px]">{e.categoria}</Badge>
-                        </div>
-                      )}
-                      {e.note && (
-                        <div className="flex gap-1.5">
-                          <span className="text-xs text-muted-foreground w-16 shrink-0">Note:</span>
-                          <span className="text-xs text-muted-foreground">{e.note}</span>
-                        </div>
-                      )}
-                      {!e.categoria && !e.note && (
-                        <span className="text-xs text-muted-foreground italic">Nessun dettaglio — clicca matita per modificare</span>
-                      )}
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          )
-        })}
+                    )}
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
       </div>
     </div>
   )

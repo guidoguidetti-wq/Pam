@@ -12,6 +12,7 @@ export async function GET(req: NextRequest) {
   const enteId = searchParams.get('enteId')
   const contoId = searchParams.get('contoId')
   const tipo = searchParams.get('tipo') // 'entrate' | 'uscite' | ''
+  const categoriaEnte = searchParams.get('categoriaEnte')
 
   try {
     const where: Record<string, unknown> = {}
@@ -25,11 +26,12 @@ export async function GET(req: NextRequest) {
     if (contoId) where.contoId = parseInt(contoId)
     if (tipo === 'entrate') where.importo = { gt: 0 }
     if (tipo === 'uscite') where.importo = { lt: 0 }
+    if (categoriaEnte) where.ente = { categoria: categoriaEnte }
 
     const movimenti = await prisma.movimentoBancario.findMany({
       where,
       include: {
-        ente: { select: { id: true, nome: true } },
+        ente: { select: { id: true, nome: true, categoria: true } },
         conto: { select: { id: true, banca: true, numeroConto: true } },
       },
       orderBy: [{ dataOperazione: 'desc' }, { id: 'desc' }],
