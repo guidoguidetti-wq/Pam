@@ -29,12 +29,14 @@ export async function GET(req: NextRequest) {
     const movimenti = await prisma.movimentoBancario.findMany({
       where,
       include: {
-        ente: { select: { nome: true } },
+        ente: { select: { nome: true, categoria: true } },
         conto: { select: { banca: true, numeroConto: true } },
       },
       orderBy:
         ordinamento === 'ente'
           ? [{ ente: { nome: 'asc' } }, { dataOperazione: 'desc' }]
+          : ordinamento === 'categoria'
+          ? [{ ente: { categoria: 'asc' } }, { ente: { nome: 'asc' } }, { dataOperazione: 'desc' }]
           : [{ dataOperazione: 'desc' }],
     })
 
@@ -46,6 +48,7 @@ export async function GET(req: NextRequest) {
           id: Number(m.id),
           dataOperazione: m.dataOperazione.toISOString().slice(0, 10),
           ente: m.ente?.nome ?? '—',
+          categoriaEnte: m.ente?.categoria ?? '',
           descrizione: m.descrizione,
           importo: Number(m.importo),
           categoria: m.categoria ?? '',

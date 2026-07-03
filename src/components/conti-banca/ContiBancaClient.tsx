@@ -53,6 +53,7 @@ export function ContiBancaClient() {
   // Inline ente edit
   const [editEnteId, setEditEnteId] = useState<number | null>(null)
   const [editNome, setEditNome] = useState('')
+  const [editCategoriaEnte, setEditCategoriaEnte] = useState('')
 
   const categorieEnti = Array.from(new Set(enti.map(e => e.categoria).filter(Boolean) as string[])).sort()
 
@@ -89,14 +90,17 @@ export function ContiBancaClient() {
 
   async function saveEnte(id: number) {
     try {
+      const categoria = editCategoriaEnte.trim() || null
       const res = await fetch(`/api/conti-banca/enti?id=${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nome: editNome }),
+        body: JSON.stringify({ nome: editNome, categoria }),
       })
       if (!res.ok) throw new Error()
-      setEnti(prev => prev.map(e => e.id === id ? { ...e, nome: editNome } : e))
-      setMovimenti(prev => prev.map(m => m.ente?.id === id ? { ...m, ente: { ...m.ente, nome: editNome } } : m))
+      setEnti(prev => prev.map(e => e.id === id ? { ...e, nome: editNome, categoria } : e))
+      setMovimenti(prev => prev.map(m =>
+        m.ente?.id === id ? { ...m, ente: { ...m.ente, nome: editNome, categoria } } : m
+      ))
       setEditEnteId(null)
       toast.success('Ente aggiornato')
     } catch {
@@ -104,7 +108,7 @@ export function ContiBancaClient() {
     }
   }
 
-  function reportUrl(ord: 'data' | 'ente') {
+  function reportUrl(ord: string) {
     const p = new URLSearchParams({ da, a, ordinamento: ord })
     if (contoId !== 'all') p.set('contoId', contoId)
     if (enteId !== 'all') p.set('enteId', enteId)
@@ -180,6 +184,9 @@ export function ContiBancaClient() {
           <a href={reportUrl('ente')} target="_blank" rel="noopener noreferrer">
             <Button size="sm" variant="outline"><FileText className="h-4 w-4 mr-1" />PDF per Ente</Button>
           </a>
+          <a href={reportUrl('categoria')} target="_blank" rel="noopener noreferrer">
+            <Button size="sm" variant="outline"><FileText className="h-4 w-4 mr-1" />PDF per Categoria</Button>
+          </a>
           <Link href="/conti-banca/enti">
             <Button size="sm" variant="outline"><Building2 className="h-4 w-4 mr-1" />Gestione Enti</Button>
           </Link>
@@ -244,7 +251,7 @@ export function ContiBancaClient() {
                       {m.ente && (
                         <button
                           className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-foreground"
-                          onClick={() => { setEditEnteId(m.ente!.id); setEditNome(m.ente!.nome) }}
+                          onClick={() => { setEditEnteId(m.ente!.id); setEditNome(m.ente!.nome); setEditCategoriaEnte(m.ente!.categoria ?? '') }}
                         >
                           <Pencil className="h-3 w-3" />
                         </button>
@@ -252,10 +259,20 @@ export function ContiBancaClient() {
                     </div>
                   )}
                 </td>
-                <td className="px-3 py-1.5">
-                  {m.ente?.categoria
-                    ? <Badge variant="outline" className="text-[10px]">{m.ente.categoria}</Badge>
-                    : <span className="text-xs text-muted-foreground">—</span>}
+                <td className="px-3 py-1.5 min-w-[130px]">
+                  {editEnteId === m.ente?.id ? (
+                    <Input
+                      value={editCategoriaEnte}
+                      onChange={e => setEditCategoriaEnte(e.target.value)}
+                      placeholder="Categoria…"
+                      className="h-6 text-xs w-28"
+                      onKeyDown={e => { if (e.key === 'Enter') saveEnte(editEnteId!) }}
+                    />
+                  ) : (
+                    m.ente?.categoria
+                      ? <Badge variant="outline" className="text-[10px]">{m.ente.categoria}</Badge>
+                      : <span className="text-xs text-muted-foreground">—</span>
+                  )}
                 </td>
                 <td className="px-3 py-1.5 max-w-xs">
                   <span className="text-xs text-muted-foreground line-clamp-2" title={m.descrizione}>{m.descrizione}</span>
