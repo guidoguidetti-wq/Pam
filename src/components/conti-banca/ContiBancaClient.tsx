@@ -217,6 +217,10 @@ export function ContiBancaClient() {
         </div>
       </div>
 
+      <datalist id="categorie-ente-datalist">
+        {categorieEnti.map(c => <option key={c} value={c} />)}
+      </datalist>
+
       {/* Tabella */}
       <div className="rounded-lg border overflow-x-auto">
         <table className="w-full text-sm">
@@ -266,6 +270,7 @@ export function ContiBancaClient() {
                       onChange={e => setEditCategoriaEnte(e.target.value)}
                       placeholder="Categoria…"
                       className="h-6 text-xs w-28"
+                      list="categorie-ente-datalist"
                       onKeyDown={e => { if (e.key === 'Enter') saveEnte(editEnteId!) }}
                     />
                   ) : (
