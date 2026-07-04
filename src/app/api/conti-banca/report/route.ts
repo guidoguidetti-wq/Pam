@@ -26,6 +26,14 @@ export async function GET(req: NextRequest) {
     if (contoId) where.contoId = parseInt(contoId)
     if (enteId) where.enteId = parseInt(enteId)
 
+    const categorieEscluse = await prisma.enteCategoria.findMany({
+      where: { inestratto: false },
+      select: { categoria: true },
+    })
+    if (categorieEscluse.length > 0) {
+      where.NOT = { ente: { categoria: { in: categorieEscluse.map(c => c.categoria) } } }
+    }
+
     const movimenti = await prisma.movimentoBancario.findMany({
       where,
       include: {

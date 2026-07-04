@@ -19,6 +19,7 @@ export async function GET(_req: NextRequest) {
 const createSchema = z.object({
   categoria: z.string().trim().min(1).max(100),
   inestratto: z.boolean().optional(),
+  ingrafico: z.boolean().optional(),
 })
 
 export async function POST(req: NextRequest) {
@@ -31,7 +32,11 @@ export async function POST(req: NextRequest) {
 
   try {
     const categoria = await prisma.enteCategoria.create({
-      data: { categoria: parsed.data.categoria, inestratto: parsed.data.inestratto ?? true },
+      data: {
+        categoria: parsed.data.categoria,
+        inestratto: parsed.data.inestratto ?? true,
+        ingrafico: parsed.data.ingrafico ?? true,
+      },
     })
     return NextResponse.json(categoria, { status: 201 })
   } catch (err: unknown) {
@@ -46,6 +51,7 @@ export async function POST(req: NextRequest) {
 const updateSchema = z.object({
   categoria: z.string().trim().min(1).max(100).optional(),
   inestratto: z.boolean().optional(),
+  ingrafico: z.boolean().optional(),
 })
 
 export async function PUT(req: NextRequest) {

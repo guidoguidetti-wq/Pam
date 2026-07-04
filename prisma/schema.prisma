@@ -285,6 +285,7 @@ model EnteCategoria {
   id         Int      @id @default(autoincrement())
   categoria  String   @unique @db.VarChar(100)
   inestratto Boolean  @default(true)
+  ingrafico  Boolean  @default(true)
   createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz
 
   @@map("enticategorie")

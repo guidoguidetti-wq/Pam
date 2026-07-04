@@ -33,6 +33,9 @@ function fmtEur(n: number) {
   return new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR' }).format(n)
 }
 
+const LS_DA = 'pam_cb_da'
+const LS_A = 'pam_cb_a'
+
 export function ContiBancaClient() {
   const [movimenti, setMovimenti] = useState<Movimento[]>([])
   const [enti, setEnti] = useState<Ente[]>([])
@@ -82,6 +85,24 @@ export function ContiBancaClient() {
     fetch('/api/conti-banca/enti').then(r => r.json()).then(setEnti).catch(() => null)
     fetch('/api/conti-banca/conti').then(r => r.json()).then(setConti).catch(() => null)
   }, [])
+
+  // Restore last used date range (localStorage)
+  useEffect(() => {
+    try {
+      const savedDa = localStorage.getItem(LS_DA)
+      const savedA = localStorage.getItem(LS_A)
+      if (savedDa) setDa(savedDa)
+      if (savedA) setA(savedA)
+    } catch { /* ignore */ }
+  }, [])
+
+  // Persist date range on change
+  useEffect(() => {
+    try {
+      localStorage.setItem(LS_DA, da)
+      localStorage.setItem(LS_A, a)
+    } catch { /* ignore */ }
+  }, [da, a])
 
   useEffect(() => { load() }, [load])
 

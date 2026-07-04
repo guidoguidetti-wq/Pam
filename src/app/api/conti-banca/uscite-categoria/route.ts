@@ -25,14 +25,21 @@ export async function GET(req: NextRequest) {
     if (contoId) where.contoId = parseInt(contoId)
     if (enteId) where.enteId = parseInt(enteId)
 
-    const movimenti = await prisma.movimentoBancario.findMany({
-      where,
-      select: { importo: true, ente: { select: { categoria: true } } },
-    })
+    const [movimenti, categorieEnti] = await Promise.all([
+      prisma.movimentoBancario.findMany({
+        where,
+        select: { importo: true, ente: { select: { categoria: true } } },
+      }),
+      prisma.enteCategoria.findMany({ select: { categoria: true, inestratto: true, ingrafico: true } }),
+    ])
+
+    const flags = new Map(categorieEnti.map(c => [c.categoria, c]))
 
     const totali = new Map<string, number>()
     for (const m of movimenti) {
       const categoria = m.ente?.categoria ?? NON_CATEGORIZZATO
+      const flag = flags.get(categoria)
+      if (flag && (!flag.inestratto || !flag.ingrafico)) continue
       totali.set(categoria, (totali.get(categoria) ?? 0) + Math.abs(Number(m.importo)))
     }
 

@@ -11,6 +11,7 @@ type EnteCategoria = {
   id: number
   categoria: string
   inestratto: boolean
+  ingrafico: boolean
 }
 
 export function CategorieClient() {
@@ -60,18 +61,19 @@ export function CategorieClient() {
     }
   }
 
-  async function toggleInestratto(c: EnteCategoria) {
-    const nuovoValore = !c.inestratto
-    setCategorie(prev => prev.map(x => x.id === c.id ? { ...x, inestratto: nuovoValore } : x))
+  async function toggleFlag(c: EnteCategoria, campo: 'inestratto' | 'ingrafico') {
+    const valorePrecedente = c[campo]
+    const nuovoValore = !valorePrecedente
+    setCategorie(prev => prev.map(x => x.id === c.id ? { ...x, [campo]: nuovoValore } : x))
     try {
       const res = await fetch(`/api/conti-banca/enti-categorie?id=${c.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ inestratto: nuovoValore }),
+        body: JSON.stringify({ [campo]: nuovoValore }),
       })
       if (!res.ok) throw new Error()
     } catch {
-      setCategorie(prev => prev.map(x => x.id === c.id ? { ...x, inestratto: c.inestratto } : x))
+      setCategorie(prev => prev.map(x => x.id === c.id ? { ...x, [campo]: valorePrecedente } : x))
       toast.error('Errore aggiornamento')
     }
   }
@@ -146,15 +148,16 @@ export function CategorieClient() {
             <tr>
               <th className="px-3 py-2 text-left">Categoria</th>
               <th className="px-3 py-2 text-center">In estratto</th>
+              <th className="px-3 py-2 text-center">In grafico</th>
               <th className="px-3 py-2 w-20"></th>
             </tr>
           </thead>
           <tbody className="divide-y">
             {loading && (
-              <tr><td colSpan={3} className="px-3 py-8 text-center text-muted-foreground">Caricamento…</td></tr>
+              <tr><td colSpan={4} className="px-3 py-8 text-center text-muted-foreground">Caricamento…</td></tr>
             )}
             {!loading && filtered.length === 0 && (
-              <tr><td colSpan={3} className="px-3 py-8 text-center text-muted-foreground">Nessuna categoria trovata</td></tr>
+              <tr><td colSpan={4} className="px-3 py-8 text-center text-muted-foreground">Nessuna categoria trovata</td></tr>
             )}
             {filtered.map(c => {
               const isEditing = editId === c.id
@@ -175,7 +178,11 @@ export function CategorieClient() {
                   </td>
 
                   <td className="px-3 py-2 text-center">
-                    <Switch checked={c.inestratto} onCheckedChange={() => toggleInestratto(c)} />
+                    <Switch checked={c.inestratto} onCheckedChange={() => toggleFlag(c, 'inestratto')} />
+                  </td>
+
+                  <td className="px-3 py-2 text-center">
+                    <Switch checked={c.ingrafico} onCheckedChange={() => toggleFlag(c, 'ingrafico')} />
                   </td>
 
                   <td className="px-3 py-2 text-center">
