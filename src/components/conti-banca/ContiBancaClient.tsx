@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
-import { Upload, FileText, Pencil, Check, X, Building2, Trash2 } from 'lucide-react'
+import { Upload, FileText, Pencil, Check, X, Building2, Tag, BarChart3, Trash2 } from 'lucide-react'
 import Link from 'next/link'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
@@ -189,6 +189,12 @@ export function ContiBancaClient() {
           </a>
           <Link href="/conti-banca/enti">
             <Button size="sm" variant="outline"><Building2 className="h-4 w-4 mr-1" />Gestione Enti</Button>
+          </Link>
+          <Link href="/conti-banca/categorie">
+            <Button size="sm" variant="outline"><Tag className="h-4 w-4 mr-1" />Gestione Categorie</Button>
+          </Link>
+          <Link href={`/conti-banca/report-uscite?${new URLSearchParams({ da, a, ...(contoId !== 'all' ? { contoId } : {}) })}`}>
+            <Button size="sm" variant="outline"><BarChart3 className="h-4 w-4 mr-1" />Grafico Uscite</Button>
           </Link>
           <Link href="/conti-banca/import">
             <Button size="sm"><Upload className="h-4 w-4 mr-1" />Importa Excel</Button>
