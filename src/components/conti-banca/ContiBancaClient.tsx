@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
-import { Upload, FileText, Pencil, Check, X, Building2, Tag, BarChart3, Trash2 } from 'lucide-react'
+import { Upload, FileText, Pencil, Check, X, Building2, Tag, BarChart3, CreditCard, Trash2 } from 'lucide-react'
 import Link from 'next/link'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
@@ -219,6 +219,9 @@ export function ContiBancaClient() {
           </Link>
           <Link href="/conti-banca/import">
             <Button size="sm"><Upload className="h-4 w-4 mr-1" />Importa Excel</Button>
+          </Link>
+          <Link href="/conti-banca/import-carta">
+            <Button size="sm" variant="outline"><CreditCard className="h-4 w-4 mr-1" />Importa Carta BPER</Button>
           </Link>
           <Button size="sm" variant="destructive" onClick={resetImport}>
             <Trash2 className="h-4 w-4 mr-1" />Reset

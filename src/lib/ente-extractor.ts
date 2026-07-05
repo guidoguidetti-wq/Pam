@@ -79,6 +79,19 @@ export function preProcessDescription(desc: string): string | null {
   const bonInstMatch = desc.match(/^BONIFICO\s+ISTANTANEO\s+o\/c:\s+(.+?)\s{2,}/i)
   if (bonInstMatch) return bonInstMatch[1].trim()
 
+  // Movimenti carta di credito: il commerciante è seguito da un ID transazione
+  // casuale (e spesso l'indirizzo) che varia ad ogni acquisto — va scartato
+  // per evitare un ente diverso per ogni singola transazione.
+  if (/^(AMZN\s+Mktp|Amazon\.it\*|AMAZON\*|WWW\.AMAZON\.\*)/i.test(desc)) return 'Amazon'
+  if (/^Amazon\s+Prime\b/i.test(desc)) return 'Amazon Prime'
+  if (/^Kindle\s+Svcs/i.test(desc)) return 'Amazon Kindle'
+  if (/^Ad\s+free\s+for\s+PrimeVideo/i.test(desc)) return 'Amazon Prime Video'
+  if (/^(CLAUDE\.AI\s+SUBSCRIPTION|ANTHROPIC\*)/i.test(desc)) return 'Anthropic Claude'
+
+  // "PAYPAL *MERCHANT indirizzo…" — tiene solo il nome del commerciante
+  const paypalMatch = desc.match(/^PAYPAL\s+\*([A-Z0-9&.' -]+?)(?:\s+(?:Via|Viale|Corso|Piazza|Piazzale|Strada)\s|\s+\d|$)/i)
+  if (paypalMatch) return paypalMatch[1].trim()
+
   return null
 }
 

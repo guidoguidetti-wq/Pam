@@ -2,8 +2,9 @@
 
 import { useRef, useState, useEffect } from 'react'
 import * as XLSX from 'xlsx'
-import { FileText, CreditCard, Upload, X, CheckCircle2, BarChart3, Download, Loader2 } from 'lucide-react'
+import { FileText, CreditCard, Upload, X, CheckCircle2, BarChart3, Download, Loader2, RefreshCw } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { toast } from 'sonner'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -273,6 +274,7 @@ export function FatturePagamentiClient() {
   const [righe,       setRighe]       = useState<RigaRiconciliazione[] | null>(null)
   const [loading,     setLoading]     = useState(false)
   const [pdfLoading,  setPdfLoading]  = useState(false)
+  const [syncing,     setSyncing]     = useState(false)
   const [error,       setError]       = useState<string | null>(null)
   const [parseError,  setParseError]  = useState<{ fat?: string; pag?: string }>({})
 
@@ -326,6 +328,26 @@ export function FatturePagamentiClient() {
     } catch (e) {
       setParseError(prev => ({ ...prev, pag: e instanceof Error ? e.message : 'Errore lettura file' }))
       setParsedMovimenti(null)
+    }
+  }
+
+  async function syncFromContiBanca() {
+    setPagamentiFile(null)
+    setRighe(null)
+    setParseError(e => ({ ...e, pag: undefined }))
+    setSyncing(true)
+    try {
+      const res = await fetch('/api/conti-banca/movimenti-entrate')
+      if (!res.ok) throw new Error('Errore nel recupero movimenti da Conti Banca')
+      const rows: Movimento[] = await res.json()
+      if (!rows.length) throw new Error('Nessun movimento (entrata) trovato in Conti Banca.')
+      const now = new Date().toLocaleString('it-IT')
+      setParsedMovimenti({ rows, info: { data: rows, filename: `Conti Banca — sincronizzato ${now}`, count: rows.length } })
+      toast.success(`Sincronizzati ${rows.length} movimenti da Conti Banca`)
+    } catch (e) {
+      setParseError(prev => ({ ...prev, pag: e instanceof Error ? e.message : 'Errore sincronizzazione' }))
+    } finally {
+      setSyncing(false)
     }
   }
 
@@ -422,6 +444,15 @@ export function FatturePagamentiClient() {
           {parseError.pag && (
             <p className="text-xs text-destructive px-1">{parseError.pag}</p>
           )}
+          <button
+            type="button"
+            onClick={syncFromContiBanca}
+            disabled={syncing}
+            className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground disabled:opacity-50 px-1"
+          >
+            <RefreshCw className={cn('h-3 w-3', syncing && 'animate-spin')} />
+            {syncing ? 'Sincronizzazione…' : 'Sincronizza da Conti Banca (entrate)'}
+          </button>
         </div>
       </div>
 
