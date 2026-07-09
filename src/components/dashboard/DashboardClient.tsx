@@ -64,8 +64,8 @@ const PRIORITA_BADGE = {
 }
 
 const STATO_LABEL: Record<string, string> = {
-  APERTA: 'Aperta',
-  IN_CORSO: 'In corso',
+  APERTA: 'Evidenza',
+  IN_CORSO: 'Aperta',
   IN_ATTESA: 'In attesa',
 }
 

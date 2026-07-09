@@ -2,8 +2,9 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import { toast } from 'sonner'
-import { Plus, Pencil, Trash2, Loader2, Calendar, Building2, User, ChevronDown } from 'lucide-react'
+import { Plus, Pencil, Trash2, Loader2, Calendar, Building2, User, ChevronDown, Archive } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { cn } from '@/lib/utils'
 import TodoDialog, { type TodoItem } from './TodoDialog'
 
@@ -24,11 +25,15 @@ interface Props {
 }
 
 const STATI = [
-  { key: 'APERTA', label: 'Aperta', color: 'border-blue-400 bg-blue-50 dark:bg-blue-950/30', headerColor: 'bg-blue-400 text-white' },
-  { key: 'IN_CORSO', label: 'In corso', color: 'border-amber-400 bg-amber-50 dark:bg-amber-950/30', headerColor: 'bg-amber-400 text-white' },
+  { key: 'APERTA', label: 'Evidenza', color: 'border-blue-400 bg-blue-50 dark:bg-blue-950/30', headerColor: 'bg-blue-400 text-white' },
+  { key: 'IN_CORSO', label: 'Aperta', color: 'border-amber-400 bg-amber-50 dark:bg-amber-950/30', headerColor: 'bg-amber-400 text-white' },
   { key: 'IN_ATTESA', label: 'In attesa', color: 'border-purple-400 bg-purple-50 dark:bg-purple-950/30', headerColor: 'bg-purple-400 text-white' },
   { key: 'CHIUSA', label: 'Chiusa', color: 'border-slate-300 bg-slate-50 dark:bg-slate-900/30', headerColor: 'bg-slate-400 text-white' },
 ] as const
+
+// Colonne visualizzate nella board: lo stato Chiusa non occupa spazio in pagina,
+// è raggiungibile solo dal pulsante dedicato nell'header
+const STATI_BOARD = STATI.filter((s) => s.key !== 'CHIUSA')
 
 const PRIORITA_CONFIG = {
   URGENTE: { label: 'Urgente', dot: 'bg-red-500', border: 'border-l-red-500', badge: 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300' },
@@ -75,66 +80,63 @@ function TodoCard({
   return (
     <div
       className={cn(
-        'relative rounded-lg border border-l-4 bg-card shadow-sm p-3 space-y-2 group',
+        'relative rounded-md border border-l-4 bg-card shadow-sm p-1.5 space-y-1 group',
         cfg.border
       )}
     >
       {/* Header: priorità badge + azioni */}
-      <div className="flex items-start justify-between gap-2">
-        <span className={cn('text-[10px] font-semibold px-1.5 py-0.5 rounded shrink-0', cfg.badge)}>
+      <div className="flex items-start justify-between gap-1">
+        <span className={cn('text-[9px] font-semibold px-1 py-0.5 rounded shrink-0', cfg.badge)}>
           <span className={cn('inline-block h-1.5 w-1.5 rounded-full mr-1 align-middle', cfg.dot)} />
           {cfg.label}
         </span>
-        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-          <Button variant="ghost" size="icon" className="h-6 w-6" onClick={onEdit}>
+        <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+          <Button variant="ghost" size="icon" className="h-5 w-5" onClick={onEdit}>
             <Pencil className="h-3 w-3" />
           </Button>
-          <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive hover:text-destructive" onClick={onDelete}>
+          <Button variant="ghost" size="icon" className="h-5 w-5 text-destructive hover:text-destructive" onClick={onDelete}>
             <Trash2 className="h-3 w-3" />
           </Button>
         </div>
       </div>
 
       {/* Titolo */}
-      <p className={cn('text-sm font-medium leading-snug', todo.stato === 'CHIUSA' && 'line-through text-muted-foreground')}>
+      <p className={cn('text-xs font-medium leading-snug line-clamp-2', todo.stato === 'CHIUSA' && 'line-through text-muted-foreground')}>
         {todo.titolo}
       </p>
 
-      {/* Descrizione */}
-      {todo.descrizione && (
-        <p className="text-xs text-muted-foreground line-clamp-2">{todo.descrizione}</p>
-      )}
-
       {/* Meta info */}
-      <div className="space-y-1">
-        {committente && (
-          <div className="flex items-center gap-1 text-xs text-muted-foreground">
-            <Building2 className="h-3 w-3 shrink-0" />
-            <span className="truncate">{committente}</span>
-            {cliente && (
-              <>
-                <span className="text-muted-foreground/50">›</span>
-                <User className="h-3 w-3 shrink-0" />
-                <span className="truncate">{cliente}</span>
-              </>
-            )}
-          </div>
-        )}
-        {todo.scadenza && (
-          <div className={cn('flex items-center gap-1 text-xs', scaduta ? 'text-red-600 font-medium' : 'text-muted-foreground')}>
-            <Calendar className="h-3 w-3 shrink-0" />
-            <span>{formatScadenza(todo.scadenza)}{scaduta ? ' — scaduta!' : ''}</span>
-          </div>
-        )}
-      </div>
+      {(committente || todo.scadenza) && (
+        <div className="space-y-0.5">
+          {committente && (
+            <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
+              <Building2 className="h-2.5 w-2.5 shrink-0" />
+              <span className="truncate">{committente}</span>
+              {cliente && (
+                <>
+                  <span className="text-muted-foreground/50">›</span>
+                  <User className="h-2.5 w-2.5 shrink-0" />
+                  <span className="truncate">{cliente}</span>
+                </>
+              )}
+            </div>
+          )}
+          {todo.scadenza && (
+            <div className={cn('flex items-center gap-1 text-[10px]', scaduta ? 'text-red-600 font-medium' : 'text-muted-foreground')}>
+              <Calendar className="h-2.5 w-2.5 shrink-0" />
+              <span>{formatScadenza(todo.scadenza)}{scaduta ? ' — scaduta!' : ''}</span>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Cambio stato rapido */}
       <div className="relative">
         <button
           onClick={() => setShowStatoMenu((v) => !v)}
-          className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground transition-colors"
+          className="flex items-center gap-0.5 text-[9px] text-muted-foreground hover:text-foreground transition-colors"
         >
-          Sposta in <ChevronDown className="h-3 w-3" />
+          Sposta in <ChevronDown className="h-2.5 w-2.5" />
         </button>
         {showStatoMenu && (
           <div className="absolute bottom-full left-0 mb-1 z-20 bg-card border rounded-lg shadow-lg py-1 min-w-[130px]">
@@ -163,6 +165,7 @@ export default function TodoBoard({ committenti, clienti }: Props) {
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editingTodo, setEditingTodo] = useState<TodoItem | null>(null)
   const [activeTab, setActiveTab] = useState<string>('APERTA')
+  const [chiuseOpen, setChiuseOpen] = useState(false)
 
   const fetchTodos = useCallback(async () => {
     setLoading(true)
@@ -219,22 +222,32 @@ export default function TodoBoard({ committenti, clienti }: Props) {
   }
 
   const byStato = (stato: string) => todos.filter((t) => t.stato === stato)
+  const chiuse = byStato('CHIUSA')
 
   return (
     <div className="p-4 space-y-4">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-2">
         <h1 className="text-xl font-bold">Task & Memo</h1>
-        <Button
-          size="sm"
-          onClick={() => {
-            setEditingTodo(null)
-            setDialogOpen(true)
-          }}
-        >
-          <Plus className="h-4 w-4 mr-1" />
-          Nuovo task
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={() => setChiuseOpen(true)}>
+            <Archive className="h-4 w-4 mr-1" />
+            Chiuse
+            {chiuse.length > 0 && (
+              <span className="ml-1.5 text-[10px] font-bold bg-muted rounded-full px-1.5 py-0.5">{chiuse.length}</span>
+            )}
+          </Button>
+          <Button
+            size="sm"
+            onClick={() => {
+              setEditingTodo(null)
+              setDialogOpen(true)
+            }}
+          >
+            <Plus className="h-4 w-4 mr-1" />
+            Nuovo task
+          </Button>
+        </div>
       </div>
 
       {loading ? (
@@ -243,17 +256,17 @@ export default function TodoBoard({ committenti, clienti }: Props) {
         </div>
       ) : (
         <>
-          {/* Board desktop (4 colonne) */}
-          <div className="hidden md:grid grid-cols-4 gap-3 items-start">
-            {STATI.map((stato) => {
+          {/* Board desktop (3 colonne) */}
+          <div className="hidden md:grid grid-cols-3 gap-2 items-start">
+            {STATI_BOARD.map((stato) => {
               const items = byStato(stato.key)
               return (
                 <div key={stato.key} className={cn('rounded-xl border-2 overflow-hidden', stato.color)}>
-                  <div className={cn('px-3 py-2 flex items-center justify-between', stato.headerColor)}>
+                  <div className={cn('px-2 py-1.5 flex items-center justify-between', stato.headerColor)}>
                     <span className="text-sm font-semibold">{stato.label}</span>
                     <span className="text-xs font-bold bg-white/20 rounded-full px-2 py-0.5">{items.length}</span>
                   </div>
-                  <div className="p-2 space-y-2 min-h-[120px]">
+                  <div className="p-1.5 space-y-1.5 min-h-[80px] max-h-[calc(100vh-220px)] overflow-y-auto">
                     {items.length === 0 ? (
                       <p className="text-center text-xs text-muted-foreground py-4">Nessun task</p>
                     ) : (
@@ -280,7 +293,7 @@ export default function TodoBoard({ committenti, clienti }: Props) {
           <div className="md:hidden space-y-3">
             {/* Tab bar */}
             <div className="flex rounded-lg border overflow-hidden">
-              {STATI.map((stato) => {
+              {STATI_BOARD.map((stato) => {
                 const count = byStato(stato.key).length
                 return (
                   <button
@@ -341,6 +354,33 @@ export default function TodoBoard({ committenti, clienti }: Props) {
         clienti={clienti}
         onSaved={handleSaved}
       />
+
+      {/* Task chiusi */}
+      <Dialog open={chiuseOpen} onOpenChange={setChiuseOpen}>
+        <DialogContent className="max-w-lg max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Task chiusi ({chiuse.length})</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-1.5">
+            {chiuse.length === 0 ? (
+              <p className="text-center text-sm text-muted-foreground py-8">Nessun task chiuso</p>
+            ) : (
+              chiuse.map((todo) => (
+                <TodoCard
+                  key={todo.id}
+                  todo={todo}
+                  onEdit={() => {
+                    setEditingTodo(todo)
+                    setDialogOpen(true)
+                  }}
+                  onDelete={() => handleDelete(todo)}
+                  onChangeStato={(s) => handleChangeStato(todo, s)}
+                />
+              ))
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

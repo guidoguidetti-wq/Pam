@@ -219,8 +219,8 @@ export default function TodoDialog({ open, onOpenChange, todo, committenti, clie
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="APERTA">Aperta</SelectItem>
-                  <SelectItem value="IN_CORSO">In corso</SelectItem>
+                  <SelectItem value="APERTA">Evidenza</SelectItem>
+                  <SelectItem value="IN_CORSO">Aperta</SelectItem>
                   <SelectItem value="IN_ATTESA">In attesa</SelectItem>
                   <SelectItem value="CHIUSA">Chiusa</SelectItem>
                 </SelectContent>
