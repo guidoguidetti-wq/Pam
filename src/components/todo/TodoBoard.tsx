@@ -36,10 +36,10 @@ const STATI = [
 const STATI_BOARD = STATI.filter((s) => s.key !== 'CHIUSA')
 
 const PRIORITA_CONFIG = {
-  URGENTE: { label: 'Urgente', dot: 'bg-red-500', border: 'border-l-red-500', badge: 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300' },
-  ALTA:    { label: 'Alta',    dot: 'bg-orange-400', border: 'border-l-orange-400', badge: 'bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300' },
-  MEDIA:   { label: 'Media',   dot: 'bg-blue-400', border: 'border-l-blue-400', badge: 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300' },
-  BASSA:   { label: 'Bassa',   dot: 'bg-slate-400', border: 'border-l-slate-400', badge: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400' },
+  URGENTE: { label: 'Urgente', dot: 'bg-red-500', border: 'border-l-red-500', badge: 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300', cardBg: 'bg-red-50 dark:bg-red-950/20' },
+  ALTA:    { label: 'Alta',    dot: 'bg-orange-400', border: 'border-l-orange-400', badge: 'bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300', cardBg: 'bg-orange-50 dark:bg-orange-950/20' },
+  MEDIA:   { label: 'Media',   dot: 'bg-blue-400', border: 'border-l-blue-400', badge: 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300', cardBg: 'bg-card' },
+  BASSA:   { label: 'Bassa',   dot: 'bg-slate-400', border: 'border-l-slate-400', badge: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400', cardBg: 'bg-card' },
 }
 
 function isScaduta(scadenza: string | null) {
@@ -80,81 +80,94 @@ function TodoCard({
   return (
     <div
       className={cn(
-        'relative rounded-md border border-l-4 bg-card shadow-sm p-1.5 space-y-1 group',
-        cfg.border
+        'relative rounded-md border border-l-4 shadow-sm p-1.5 group flex gap-2',
+        cfg.border,
+        cfg.cardBg
       )}
     >
-      {/* Header: priorità badge + azioni */}
-      <div className="flex items-start justify-between gap-1">
-        <span className={cn('text-[9px] font-semibold px-1 py-0.5 rounded shrink-0', cfg.badge)}>
-          <span className={cn('inline-block h-1.5 w-1.5 rounded-full mr-1 align-middle', cfg.dot)} />
-          {cfg.label}
-        </span>
-        <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-          <Button variant="ghost" size="icon" className="h-5 w-5" onClick={onEdit}>
-            <Pencil className="h-3 w-3" />
-          </Button>
-          <Button variant="ghost" size="icon" className="h-5 w-5 text-destructive hover:text-destructive" onClick={onDelete}>
-            <Trash2 className="h-3 w-3" />
-          </Button>
+      {/* Colonna sinistra: contenuto esistente, invariato */}
+      <div className="flex-1 min-w-0 space-y-1">
+        {/* Header: priorità badge + azioni */}
+        <div className="flex items-start justify-between gap-1">
+          <span className={cn('text-[9px] font-semibold px-1 py-0.5 rounded shrink-0', cfg.badge)}>
+            <span className={cn('inline-block h-1.5 w-1.5 rounded-full mr-1 align-middle', cfg.dot)} />
+            {cfg.label}
+          </span>
+          <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+            <Button variant="ghost" size="icon" className="h-5 w-5" onClick={onEdit}>
+              <Pencil className="h-3 w-3" />
+            </Button>
+            <Button variant="ghost" size="icon" className="h-5 w-5 text-destructive hover:text-destructive" onClick={onDelete}>
+              <Trash2 className="h-3 w-3" />
+            </Button>
+          </div>
         </div>
-      </div>
 
-      {/* Titolo */}
-      <p className={cn('text-xs font-medium leading-snug line-clamp-2', todo.stato === 'CHIUSA' && 'line-through text-muted-foreground')}>
-        {todo.titolo}
-      </p>
+        {/* Titolo */}
+        <p className={cn('text-xs font-medium leading-snug line-clamp-2', todo.stato === 'CHIUSA' && 'line-through text-muted-foreground')}>
+          {todo.titolo}
+        </p>
 
-      {/* Meta info */}
-      {(committente || todo.scadenza) && (
-        <div className="space-y-0.5">
-          {committente && (
-            <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
-              <Building2 className="h-2.5 w-2.5 shrink-0" />
-              <span className="truncate">{committente}</span>
-              {cliente && (
-                <>
-                  <span className="text-muted-foreground/50">›</span>
-                  <User className="h-2.5 w-2.5 shrink-0" />
-                  <span className="truncate">{cliente}</span>
-                </>
-              )}
-            </div>
-          )}
-          {todo.scadenza && (
-            <div className={cn('flex items-center gap-1 text-[10px]', scaduta ? 'text-red-600 font-medium' : 'text-muted-foreground')}>
-              <Calendar className="h-2.5 w-2.5 shrink-0" />
-              <span>{formatScadenza(todo.scadenza)}{scaduta ? ' — scaduta!' : ''}</span>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Cambio stato rapido */}
-      <div className="relative">
-        <button
-          onClick={() => setShowStatoMenu((v) => !v)}
-          className="flex items-center gap-0.5 text-[9px] text-muted-foreground hover:text-foreground transition-colors"
-        >
-          Sposta in <ChevronDown className="h-2.5 w-2.5" />
-        </button>
-        {showStatoMenu && (
-          <div className="absolute bottom-full left-0 mb-1 z-20 bg-card border rounded-lg shadow-lg py-1 min-w-[130px]">
-            {STATI.filter((s) => s.key !== todo.stato).map((s) => (
-              <button
-                key={s.key}
-                onClick={() => {
-                  onChangeStato(s.key as TodoItem['stato'])
-                  setShowStatoMenu(false)
-                }}
-                className="block w-full text-left text-xs px-3 py-1.5 hover:bg-accent"
-              >
-                {s.label}
-              </button>
-            ))}
+        {/* Meta info */}
+        {(committente || todo.scadenza) && (
+          <div className="space-y-0.5">
+            {committente && (
+              <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
+                <Building2 className="h-2.5 w-2.5 shrink-0" />
+                <span className="truncate">{committente}</span>
+                {cliente && (
+                  <>
+                    <span className="text-muted-foreground/50">›</span>
+                    <User className="h-2.5 w-2.5 shrink-0" />
+                    <span className="truncate">{cliente}</span>
+                  </>
+                )}
+              </div>
+            )}
+            {todo.scadenza && (
+              <div className={cn('flex items-center gap-1 text-[10px]', scaduta ? 'text-red-600 font-medium' : 'text-muted-foreground')}>
+                <Calendar className="h-2.5 w-2.5 shrink-0" />
+                <span>{formatScadenza(todo.scadenza)}{scaduta ? ' — scaduta!' : ''}</span>
+              </div>
+            )}
           </div>
         )}
+
+        {/* Cambio stato rapido */}
+        <div className="relative">
+          <button
+            onClick={() => setShowStatoMenu((v) => !v)}
+            className="flex items-center gap-0.5 text-[9px] text-muted-foreground hover:text-foreground transition-colors"
+          >
+            Sposta in <ChevronDown className="h-2.5 w-2.5" />
+          </button>
+          {showStatoMenu && (
+            <div className="absolute bottom-full left-0 mb-1 z-20 bg-card border rounded-lg shadow-lg py-1 min-w-[130px]">
+              {STATI.filter((s) => s.key !== todo.stato).map((s) => (
+                <button
+                  key={s.key}
+                  onClick={() => {
+                    onChangeStato(s.key as TodoItem['stato'])
+                    setShowStatoMenu(false)
+                  }}
+                  className="block w-full text-left text-xs px-3 py-1.5 hover:bg-accent"
+                >
+                  {s.label}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
+
+      {/* Colonna destra: anteprima descrizione */}
+      {todo.descrizione && (
+        <div className="w-24 sm:w-28 shrink-0 border-l border-border/60 pl-2">
+          <p className="text-[10px] leading-snug text-muted-foreground line-clamp-5">
+            {todo.descrizione}
+          </p>
+        </div>
+      )}
     </div>
   )
 }
