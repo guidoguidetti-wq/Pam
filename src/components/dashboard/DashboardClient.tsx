@@ -12,7 +12,7 @@ import {
   Legend,
   ResponsiveContainer,
 } from 'recharts'
-import { Loader2, ChevronLeft, ChevronRight, AlertCircle, Clock, ArrowRight } from 'lucide-react'
+import { Loader2, ChevronLeft, ChevronRight, AlertCircle, Clock, ArrowRight, Target } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { formatValuta, formatOre } from '@/lib/utils'
 import { cn } from '@/lib/utils'
@@ -38,6 +38,7 @@ interface Progetto {
   committente: string
   cliente: string
   oreStimate: number | null
+  giorniStimati: number | null
   oreErogate: number
 }
 
@@ -79,6 +80,59 @@ function formatOreDecimal(ore: number): string {
   const m = Math.round((ore - h) * 60)
   if (m === 0) return `${h}h`
   return `${h}h ${m}m`
+}
+
+function formatGg(gg: number): string {
+  return new Intl.NumberFormat('it-IT', { maximumFractionDigits: 1 }).format(gg)
+}
+
+function ProgettoStimatoRow({ p }: { p: Progetto }) {
+  const oreStimate = p.oreStimate ?? 0
+  const pct = oreStimate > 0 ? (p.oreErogate / oreStimate) * 100 : 0
+  // Ore/giorno medie della stima, per convertire il residuo in giornate
+  const oreGiorno = p.giorniStimati && p.giorniStimati > 0 ? oreStimate / p.giorniStimati : 8
+  const residuoGg = (oreStimate - p.oreErogate) / oreGiorno
+  const sforato = residuoGg < 0
+  const tone =
+    pct >= 90 ? 'text-red-600' :
+    pct >= 80 ? 'text-yellow-600' :
+    'text-emerald-600'
+
+  return (
+    <div className="px-4 py-2.5 space-y-1.5">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-sm font-medium truncate">
+            {p.codice ? <span className="text-muted-foreground">[{p.codice}] </span> : null}{p.nome}
+          </p>
+          <p className="text-xs text-muted-foreground truncate">
+            {p.committente} › {p.cliente}
+            {p.dataFinePrevista && (
+              <span className="ml-2">
+                · fine {new Date(p.dataFinePrevista + 'T00:00:00').toLocaleDateString('it-IT', { day: '2-digit', month: 'short', year: '2-digit' })}
+              </span>
+            )}
+          </p>
+        </div>
+        <div className="text-right shrink-0 leading-tight">
+          <p className={cn('text-base font-bold tabular-nums', tone)}>
+            {sforato ? '+' : ''}{formatGg(Math.abs(residuoGg))} gg
+          </p>
+          <p className="text-[10px] text-muted-foreground uppercase tracking-wide">
+            {sforato ? 'sforamento' : 'residui'}
+          </p>
+        </div>
+      </div>
+      <div className="flex items-center gap-2">
+        <div className="flex-1 min-w-0">
+          <ProgressBar oreErogate={p.oreErogate} oreStimate={oreStimate} />
+        </div>
+        <span className="text-[11px] text-muted-foreground tabular-nums shrink-0">
+          {formatGg(p.oreErogate / oreGiorno)} / {formatGg(p.giorniStimati ?? oreStimate / oreGiorno)} gg
+        </span>
+      </div>
+    </div>
+  )
 }
 
 function ProgressBar({ oreErogate, oreStimate }: { oreErogate: number; oreStimate: number }) {
@@ -151,6 +205,12 @@ export default function DashboardClient() {
   const totValore = data?.mesiStats.reduce((s, m) => s + m.valoreAttivita, 0) ?? 0
   const totSpese = data?.mesiStats.reduce((s, m) => s + m.valoreSpese, 0) ?? 0
 
+  const hasTodo = (data?.todoUrgenti ?? []).length > 0
+  // Progetti stimati attivi, i più "consumati" in alto
+  const progettiStimati = (data?.progetti ?? [])
+    .filter((p) => p.tipoBudget === 'STIMATO' && p.attivo && (p.oreStimate ?? 0) > 0)
+    .sort((a, b) => b.oreErogate / b.oreStimate! - a.oreErogate / a.oreStimate!)
+
   return (
     <div className="p-4 space-y-6">
 
@@ -196,60 +256,86 @@ export default function DashboardClient() {
             </div>
           </div>
 
-          {/* Widget task urgenti */}
-          {(data?.todoUrgenti ?? []).length > 0 && (
-            <div className="rounded-lg border bg-card overflow-hidden">
-              <div className="flex items-center justify-between px-4 py-2.5 border-b bg-red-50 dark:bg-red-950/20">
-                <div className="flex items-center gap-2">
-                  <AlertCircle className="h-4 w-4 text-red-500" />
-                  <h2 className="text-sm font-semibold text-red-700 dark:text-red-400">
-                    Task urgenti / alta priorità
-                  </h2>
-                  {(data?.todoCount ?? 0) > 0 && (
-                    <span className="text-xs bg-red-100 dark:bg-red-900/40 text-red-600 dark:text-red-300 px-1.5 py-0.5 rounded-full font-medium">
-                      {data?.todoCount} aperti
-                    </span>
-                  )}
-                </div>
-                <Link href="/todo" className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors">
-                  Tutti <ArrowRight className="h-3 w-3" />
-                </Link>
-              </div>
-              <div className="divide-y">
-                {(data?.todoUrgenti ?? []).map((t) => {
-                  const scaduta = isScaduta(t.scadenza)
-                  return (
-                    <div key={t.id} className="px-4 py-2.5 flex items-start gap-3">
-                      <span className={cn(
-                        'shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded border mt-0.5',
-                        PRIORITA_BADGE[t.priorita]
-                      )}>
-                        {t.priorita === 'URGENTE' ? '🔴' : '🟠'} {t.priorita}
+          {/* Task urgenti + progetti stimati attivi, affiancati */}
+          <div className={cn('grid gap-4 items-start', hasTodo && progettiStimati.length > 0 && 'lg:grid-cols-2')}>
+            {/* Widget task urgenti */}
+            {(data?.todoUrgenti ?? []).length > 0 && (
+              <div className="rounded-lg border bg-card overflow-hidden">
+                <div className="flex items-center justify-between px-4 py-2.5 border-b bg-red-50 dark:bg-red-950/20">
+                  <div className="flex items-center gap-2">
+                    <AlertCircle className="h-4 w-4 text-red-500" />
+                    <h2 className="text-sm font-semibold text-red-700 dark:text-red-400">
+                      Task urgenti / alta priorità
+                    </h2>
+                    {(data?.todoCount ?? 0) > 0 && (
+                      <span className="text-xs bg-red-100 dark:bg-red-900/40 text-red-600 dark:text-red-300 px-1.5 py-0.5 rounded-full font-medium">
+                        {data?.todoCount} aperti
                       </span>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm font-medium truncate">{t.titolo}</p>
-                        <div className="flex items-center gap-2 flex-wrap mt-0.5">
-                          {t.committente && (
-                            <span className="text-xs text-muted-foreground truncate">
-                              {t.committente}{t.cliente ? ` › ${t.cliente}` : ''}
-                            </span>
-                          )}
-                          <span className="text-xs text-muted-foreground">{STATO_LABEL[t.stato]}</span>
-                          {t.scadenza && (
-                            <span className={cn('flex items-center gap-0.5 text-xs', scaduta ? 'text-red-600 font-medium' : 'text-muted-foreground')}>
-                              <Clock className="h-3 w-3" />
-                              {new Date(t.scadenza + 'T00:00:00').toLocaleDateString('it-IT', { day: '2-digit', month: 'short' })}
-                              {scaduta && ' — scaduta!'}
-                            </span>
-                          )}
+                    )}
+                  </div>
+                  <Link href="/todo" className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors">
+                    Tutti <ArrowRight className="h-3 w-3" />
+                  </Link>
+                </div>
+                <div className="divide-y max-h-[420px] overflow-y-auto">
+                  {(data?.todoUrgenti ?? []).map((t) => {
+                    const scaduta = isScaduta(t.scadenza)
+                    return (
+                      <div key={t.id} className="px-4 py-2.5 flex items-start gap-3">
+                        <span className={cn(
+                          'shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded border mt-0.5',
+                          PRIORITA_BADGE[t.priorita]
+                        )}>
+                          {t.priorita === 'URGENTE' ? '🔴' : '🟠'} {t.priorita}
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-medium truncate">{t.titolo}</p>
+                          <div className="flex items-center gap-2 flex-wrap mt-0.5">
+                            {t.committente && (
+                              <span className="text-xs text-muted-foreground truncate">
+                                {t.committente}{t.cliente ? ` › ${t.cliente}` : ''}
+                              </span>
+                            )}
+                            <span className="text-xs text-muted-foreground">{STATO_LABEL[t.stato]}</span>
+                            {t.scadenza && (
+                              <span className={cn('flex items-center gap-0.5 text-xs', scaduta ? 'text-red-600 font-medium' : 'text-muted-foreground')}>
+                                <Clock className="h-3 w-3" />
+                                {new Date(t.scadenza + 'T00:00:00').toLocaleDateString('it-IT', { day: '2-digit', month: 'short' })}
+                                {scaduta && ' — scaduta!'}
+                              </span>
+                            )}
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  )
-                })}
+                    )
+                  })}
+                </div>
               </div>
-            </div>
-          )}
+            )}
+
+            {/* Widget progetti stimati attivi */}
+            {progettiStimati.length > 0 && (
+              <div className="rounded-lg border bg-card overflow-hidden">
+                <div className="flex items-center justify-between px-4 py-2.5 border-b bg-violet-50 dark:bg-violet-950/20">
+                  <div className="flex items-center gap-2">
+                    <Target className="h-4 w-4 text-violet-500" />
+                    <h2 className="text-sm font-semibold text-violet-700 dark:text-violet-400">
+                      Progetti stimati attivi
+                    </h2>
+                    <span className="text-xs bg-violet-100 dark:bg-violet-900/40 text-violet-600 dark:text-violet-300 px-1.5 py-0.5 rounded-full font-medium">
+                      {progettiStimati.length}
+                    </span>
+                  </div>
+                  <Link href="/progetti" className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors">
+                    Tutti <ArrowRight className="h-3 w-3" />
+                  </Link>
+                </div>
+                <div className="divide-y max-h-[420px] overflow-y-auto">
+                  {progettiStimati.map((p) => <ProgettoStimatoRow key={p.id} p={p} />)}
+                </div>
+              </div>
+            )}
+          </div>
 
           {/* Grafico mensile */}
           <div className="rounded-lg border bg-card p-4">

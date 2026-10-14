@@ -15,6 +15,7 @@ export const TIPI_ATTIVITA = [
   { codice: 'BAN', descrizione: 'Business Analyst' },
   { codice: 'SVI', descrizione: 'Sviluppo' },
   { codice: 'OPS', descrizione: 'Operation' },
+  { codice: 'VIA', descrizione: 'Tempo Viaggio' },
 ] as const
 
 export const TIPI_SPESA: { value: TipoSpesa; label: string }[] = [

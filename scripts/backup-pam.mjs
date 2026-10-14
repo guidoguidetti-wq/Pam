@@ -1,6 +1,7 @@
 /**
- * PAM — Backup database via Prisma (Node.js)
+ * PAM — Backup completo database (struttura + dati) via Prisma (Node.js ≥ 22.18)
  * Non richiede pg_dump né tool esterni.
+ * Genera un file .sql.gz ripristinabile con scripts/restore-pam.mjs (o psql).
  *
  * Uso:
  *   node scripts/backup-pam.mjs
@@ -14,6 +15,7 @@ import fs   from 'fs'
 import path from 'path'
 import zlib from 'zlib'
 import { fileURLToPath } from 'url'
+import { buildSqlDump } from '../src/lib/backup-sql.ts'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname  = path.dirname(__filename)
@@ -56,17 +58,6 @@ function loadEnv() {
   log('Nessun file .env trovato', 'WARN')
 }
 
-// ── Serializzazione sicura (BigInt + Decimal) ─────────────────────────────────
-
-function replacer(_key, value) {
-  if (typeof value === 'bigint') return value.toString()
-  // Prisma Decimal: ha metodo toFixed
-  if (value !== null && typeof value === 'object' && typeof value.toFixed === 'function') {
-    return value.toString()
-  }
-  return value
-}
-
 // ── Backup ────────────────────────────────────────────────────────────────────
 
 async function main() {
@@ -81,70 +72,15 @@ async function main() {
   try {
     log('Connessione al database...')
 
-    // Leggi tutti i modelli
-    const [
-      tipiAttivita,
-      committenti,
-      clienti,
-      listino,
-      progetti,
-      progettoStime,
-      attivita,
-      spese,
-      allegati,
-    ] = await Promise.all([
-      prisma.tipoAttivita.findMany(),
-      prisma.committente.findMany(),
-      prisma.cliente.findMany(),
-      prisma.listino.findMany(),
-      prisma.progetto.findMany(),
-      prisma.progettoStima.findMany(),
-      prisma.attivita.findMany(),
-      prisma.spesa.findMany(),
-      prisma.allegato.findMany(),
-    ])
-
-    const stats = {
-      tipiAttivita: tipiAttivita.length,
-      committenti:  committenti.length,
-      clienti:      clienti.length,
-      listino:      listino.length,
-      progetti:     progetti.length,
-      progettoStime: progettoStime.length,
-      attivita:     attivita.length,
-      spese:        spese.length,
-      allegati:     allegati.length,
-    }
-    log(`Record letti: ${JSON.stringify(stats)}`)
-
-    const dump = {
-      meta: {
-        version:   1,
-        createdAt: new Date().toISOString(),
-        tables:    stats,
-      },
-      data: {
-        tipiAttivita,
-        committenti,
-        clienti,
-        listino,
-        progetti,
-        progettoStime,
-        attivita,
-        spese,
-        allegati,
-      },
-    }
-
-    // Serializza JSON
-    const json = JSON.stringify(dump, replacer, 2)
+    const { sql, stats } = await buildSqlDump((q) => prisma.$queryRawUnsafe(q))
+    log(`Record letti: ${JSON.stringify(stats.tables)}`)
 
     // Crea directory backup se non esiste
     fs.mkdirSync(BACKUP_DIR, { recursive: true })
 
     // Nome file con timestamp
     const ts   = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
-    const dest = path.join(BACKUP_DIR, `pam_${ts}.json.gz`)
+    const dest = path.join(BACKUP_DIR, `pam_${ts}.sql.gz`)
 
     // Comprimi e scrivi
     await new Promise((resolve, reject) => {
@@ -154,7 +90,7 @@ async function main() {
       out.on('error',  reject)
       out.on('finish', resolve)
       gzip.pipe(out)
-      gzip.end(Buffer.from(json, 'utf8'))
+      gzip.end(Buffer.from(sql, 'utf8'))
     })
 
     const sizeMB = (fs.statSync(dest).size / 1024 / 1024).toFixed(2)
@@ -164,7 +100,7 @@ async function main() {
     const cutoff  = Date.now() - KEEP_DAYS * 86400 * 1000
     let   deleted = 0
     for (const f of fs.readdirSync(BACKUP_DIR)) {
-      if (!f.startsWith('pam_') || !f.endsWith('.json.gz')) continue
+      if (!f.startsWith('pam_') || !/\.(sql|json)\.gz$/.test(f)) continue
       const fp  = path.join(BACKUP_DIR, f)
       const mts = fs.statSync(fp).mtimeMs
       if (mts < cutoff) {
@@ -175,7 +111,7 @@ async function main() {
     }
     if (deleted > 0) log(`Rimossi ${deleted} backup scaduti (>${KEEP_DAYS} giorni)`)
 
-    const total = fs.readdirSync(BACKUP_DIR).filter(f => f.endsWith('.json.gz')).length
+    const total = fs.readdirSync(BACKUP_DIR).filter(f => /\.(sql|json)\.gz$/.test(f)).length
     log(`Backup totali conservati: ${total}`)
 
   } finally {

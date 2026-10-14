@@ -73,6 +73,9 @@ export async function GET(req: NextRequest) {
       ? p.stime.reduce((acc, s) =>
           acc + parseFloat(s.giorniStimati.toString()) * parseFloat(s.orePerGiorno.toString()), 0)
       : null
+    const giorniStimati = p.tipoBudget === 'STIMATO'
+      ? p.stime.reduce((acc, s) => acc + parseFloat(s.giorniStimati.toString()), 0)
+      : null
 
     const oreErogate = p.attivita.reduce((acc, a) => {
       const ore = a.oreErogate != null
@@ -92,6 +95,7 @@ export async function GET(req: NextRequest) {
       committente: p.committente.ragioneSociale,
       cliente: p.cliente.ragioneSociale,
       oreStimate: oreStimate !== null ? Math.round(oreStimate * 100) / 100 : null,
+      giorniStimati: giorniStimati !== null ? Math.round(giorniStimati * 100) / 100 : null,
       oreErogate: Math.round(oreErogate * 100) / 100,
     }
   })

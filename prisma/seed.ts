@@ -12,6 +12,7 @@ async function main() {
     { codice: 'BAN', descrizione: 'Business Analyst' },
     { codice: 'SVI', descrizione: 'Sviluppo' },
     { codice: 'OPS', descrizione: 'Operation' },
+    { codice: 'VIA', descrizione: 'Tempo Viaggio' },
   ]
 
   for (const tipo of tipi) {

@@ -50,7 +50,7 @@ export default function SidebarBackup() {
       const blob = await res.blob()
       const disposition = res.headers.get('Content-Disposition') ?? ''
       const nameMatch = disposition.match(/filename="([^"]+)"/)
-      const downloadName = nameMatch?.[1] ?? 'pam_backup.json'
+      const downloadName = nameMatch?.[1] ?? 'pam_backup.sql'
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url

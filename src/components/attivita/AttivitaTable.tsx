@@ -19,7 +19,7 @@ import {
 } from '@/components/ui/select'
 import { TipiAttivitaDialog } from './TipiAttivitaDialog'
 import { AttivitaForm } from './AttivitaForm'
-import { cn, formatOre, calcolaDurata, coloreCommittente, formatValuta } from '@/lib/utils'
+import { cn, formatOre, formatGiornate, calcolaDurata, coloreCommittente, formatValuta } from '@/lib/utils'
 import { Plus, Settings2, Pencil, Loader2, Trash2, ArrowUpDown, ArrowUp, ArrowDown, X, Download } from 'lucide-react'
 import * as XLSX from 'xlsx'
 
@@ -30,6 +30,7 @@ const TIPO_COLORS: Record<string, string> = {
   BAN: 'bg-cyan-100 text-cyan-700',
   SVI: 'bg-emerald-100 text-emerald-700',
   OPS: 'bg-rose-100 text-rose-700',
+  VIA: 'bg-slate-200 text-slate-700',
 }
 
 interface Committente { id: number; ragioneSociale: string }
@@ -229,6 +230,7 @@ export function AttivitaTable({ committenti: _committenti, tipiAttivita: initial
           </span>
           <span className="text-muted-foreground">
             Ore: <span className="font-medium text-foreground tabular-nums">{formatOre(totaleOreMin)}</span>
+            <span className="tabular-nums"> ({formatGiornate(totaleOreMin)})</span>
           </span>
           <span className="text-muted-foreground">
             Competenze: <span className="font-medium text-foreground tabular-nums">{formatValuta(totaleValore)}</span>

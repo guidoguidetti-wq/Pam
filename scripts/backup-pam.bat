@@ -12,7 +12,7 @@ set PROJECT_DIR=%SCRIPT_DIR%..
 :: Vai alla root del progetto (Prisma legge .env da lì)
 cd /d "%PROJECT_DIR%"
 
-node scripts\backup-pam.mjs
+node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts\backup-pam.mjs
 
 if %ERRORLEVEL% neq 0 (
     echo ERRORE: backup fallito. Controlla %SCRIPT_DIR%backup.log

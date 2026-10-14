@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { buildSqlDump, type Row } from '@/lib/backup-sql'
 
 export async function GET() {
   const session = await auth()
@@ -12,45 +13,29 @@ export async function GET() {
   return NextResponse.json(last)
 }
 
+export const maxDuration = 60
+
 export async function POST() {
   const session = await auth()
   if (!session) return NextResponse.json({ error: 'Non autorizzato' }, { status: 401 })
 
   const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
-  const filename = `pam_backup_${ts}.json`
+  const filename = `pam_backup_${ts}.sql`
 
   try {
-    const [tipiAttivita, committenti, clienti, listino, progetti, progettoStime, attivita, spese, allegati] =
-      await Promise.all([
-        prisma.tipoAttivita.findMany(),
-        prisma.committente.findMany(),
-        prisma.cliente.findMany(),
-        prisma.listino.findMany(),
-        prisma.progetto.findMany(),
-        prisma.progettoStima.findMany(),
-        prisma.attivita.findMany(),
-        prisma.spesa.findMany(),
-        prisma.allegato.findMany(),
-      ])
-
-    const backup = {
-      exportedAt: new Date().toISOString(),
-      version: '1.0',
-      tables: { tipiAttivita, committenti, clienti, listino, progetti, progettoStime, attivita, spese, allegati },
-    }
-
-    const json = JSON.stringify(backup, (_, v) => (typeof v === 'bigint' ? v.toString() : v), 2)
-    const fileSizeBytes = Buffer.byteLength(json, 'utf-8')
+    // Dump completo: struttura (tabelle, enum, vincoli, indici, funzioni…) + dati di tutte le tabelle
+    const { sql } = await buildSqlDump((q) => prisma.$queryRawUnsafe<Row[]>(q))
+    const fileSizeBytes = Buffer.byteLength(sql, 'utf-8')
 
     // Registra nel log (senza percorso fisico — il file va al browser)
     await prisma.backupLog.create({
       data: { filename, fileSizeBytes, status: 'success' },
     })
 
-    return new Response(json, {
+    return new Response(sql, {
       status: 200,
       headers: {
-        'Content-Type': 'application/json',
+        'Content-Type': 'application/sql; charset=utf-8',
         'Content-Disposition': `attachment; filename="${filename}"`,
         'Content-Length': String(fileSizeBytes),
       },

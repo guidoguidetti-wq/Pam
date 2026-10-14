@@ -123,6 +123,7 @@ PMG → Project Management
 BAN → Business Analyst
 SVI → Sviluppo
 OPS → Operation
+VIA → Tempo Viaggio
 ```
 
 ### Tipi spesa (enum fisso)

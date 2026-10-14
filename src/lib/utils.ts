@@ -16,7 +16,14 @@ export function formatOre(minuti: number): string {
 /** Formatta importo in valuta */
 export function formatValuta(importo: number | null | undefined, valuta = 'EUR'): string {
   if (importo == null) return '—'
-  return new Intl.NumberFormat('it-IT', { style: 'currency', currency: valuta }).format(importo)
+  // useGrouping 'always': in it-IT il default non mette il punto sui numeri a 4 cifre (1234,00 €)
+  return new Intl.NumberFormat('it-IT', { style: 'currency', currency: valuta, useGrouping: 'always' }).format(importo)
+}
+
+/** Formatta minuti in giornate lavorative (default 8 h/giorno), es. "12,5 gg" */
+export function formatGiornate(minuti: number, oreGiornata = 8): string {
+  const gg = minuti / 60 / oreGiornata
+  return `${new Intl.NumberFormat('it-IT', { maximumFractionDigits: 1, useGrouping: 'always' }).format(gg)} gg`
 }
 
 /** Colore committente deterministico da ID */
