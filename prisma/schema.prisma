@@ -50,9 +50,9 @@ enum StatoTodo {
 }
 
 model TipoAttivita {
-  id          Int    @id @default(autoincrement()) @db.SmallInt
-  codice      String @unique @db.VarChar(10)
-  descrizione String @db.VarChar(100)
+  id          Int     @id @default(autoincrement()) @db.SmallInt
+  codice      String  @unique @db.VarChar(10)
+  descrizione String  @db.VarChar(100)
   attivo      Boolean @default(true)
 
   listino       Listino[]
@@ -65,22 +65,22 @@ model TipoAttivita {
 // ─── COMMITTENTI ───────────────────────────────────────────
 
 model Committente {
-  id              Int      @id @default(autoincrement())
-  ragioneSociale  String   @db.VarChar(200) @map("ragione_sociale")
-  partitaIva      String?  @db.VarChar(20)  @map("partita_iva")
-  codiceFiscale   String?  @db.VarChar(16)  @map("codice_fiscale")
-  indirizzo       String?  @db.Text
-  email           String?  @db.VarChar(150)
-  telefono        String?  @db.VarChar(30)
-  note            String?  @db.Text
-  attivo          Boolean  @default(true)
-  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz
+  id             Int      @id @default(autoincrement())
+  ragioneSociale String   @map("ragione_sociale") @db.VarChar(200)
+  partitaIva     String?  @map("partita_iva") @db.VarChar(20)
+  codiceFiscale  String?  @map("codice_fiscale") @db.VarChar(16)
+  indirizzo      String?  @db.Text
+  email          String?  @db.VarChar(150)
+  telefono       String?  @db.VarChar(30)
+  note           String?  @db.Text
+  attivo         Boolean  @default(true)
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
 
-  clienti   Cliente[]
-  listino   Listino[]
-  progetti  Progetto[]
-  attivita  Attivita[]
-  todo      Todo[]
+  clienti  Cliente[]
+  listino  Listino[]
+  progetti Progetto[]
+  attivita Attivita[]
+  todo     Todo[]
 
   @@map("committente")
 }
@@ -90,8 +90,8 @@ model Committente {
 model Cliente {
   id             Int      @id @default(autoincrement())
   committenteId  Int      @map("committente_id")
-  ragioneSociale String   @db.VarChar(200) @map("ragione_sociale")
-  partitaIva     String?  @db.VarChar(20)  @map("partita_iva")
+  ragioneSociale String   @map("ragione_sociale") @db.VarChar(200)
+  partitaIva     String?  @map("partita_iva") @db.VarChar(20)
   indirizzo      String?  @db.Text
   email          String?  @db.VarChar(150)
   note           String?  @db.Text
@@ -112,21 +112,21 @@ model Cliente {
 // ─── LISTINO ───────────────────────────────────────────────
 
 model Listino {
-  id              Int             @id @default(autoincrement())
-  committenteId   Int             @map("committente_id")
-  clienteId       Int?            @map("cliente_id")       // NULL = default committente
-  tipoAttivitaId  Int?            @db.SmallInt @map("tipo_attivita_id")  // NULL = tutti i tipi
-  tipoVoce        TipoVoceListino @map("tipo_voce")
-  tariffa         Decimal         @db.Decimal(10, 4)
-  tariffaKm       Decimal?        @db.Decimal(10, 4) @map("tariffa_km")
-  valuta          String          @default("EUR") @db.Char(3)
-  oreGiornata     Decimal         @default(8.00)  @db.Decimal(4, 2) @map("ore_giornata")
-  dataInizio      DateTime        @db.Date @map("data_inizio")
-  dataFine        DateTime?       @db.Date @map("data_fine")
-  note            String?         @db.Text
+  id             Int             @id @default(autoincrement())
+  committenteId  Int             @map("committente_id")
+  clienteId      Int?            @map("cliente_id") // NULL = default committente
+  tipoAttivitaId Int?            @map("tipo_attivita_id") @db.SmallInt // NULL = tutti i tipi
+  tipoVoce       TipoVoceListino @map("tipo_voce")
+  tariffa        Decimal         @db.Decimal(10, 4)
+  tariffaKm      Decimal?        @map("tariffa_km") @db.Decimal(10, 4)
+  valuta         String          @default("EUR") @db.Char(3)
+  oreGiornata    Decimal         @default(8.00) @map("ore_giornata") @db.Decimal(4, 2)
+  dataInizio     DateTime        @map("data_inizio") @db.Date
+  dataFine       DateTime?       @map("data_fine") @db.Date
+  note           String?         @db.Text
 
-  committente  Committente  @relation(fields: [committenteId], references: [id])
-  cliente      Cliente?     @relation(fields: [clienteId], references: [id])
+  committente  Committente   @relation(fields: [committenteId], references: [id])
+  cliente      Cliente?      @relation(fields: [clienteId], references: [id])
   tipoAttivita TipoAttivita? @relation(fields: [tipoAttivitaId], references: [id])
 
   @@index([committenteId, clienteId, tipoAttivitaId])
@@ -136,23 +136,24 @@ model Listino {
 // ─── PROGETTI ──────────────────────────────────────────────
 
 model Progetto {
-  id                Int        @id @default(autoincrement())
-  committenteId     Int        @map("committente_id")
-  clienteId         Int        @map("cliente_id")
-  codice            String?    @db.VarChar(50)
-  nome              String     @db.VarChar(200)
-  descrizione       String?    @db.Text
-  tipoBudget        TipoBudget @default(CONSUNTIVO) @map("tipo_budget")
-  dataInizio        DateTime?  @db.Date @map("data_inizio")
-  dataFinePrevista  DateTime?  @db.Date @map("data_fine_prevista")
-  attivo            Boolean    @default(true)
-  note              String?    @db.Text
-  createdAt         DateTime   @default(now()) @map("created_at") @db.Timestamptz
+  id               Int        @id @default(autoincrement())
+  committenteId    Int        @map("committente_id")
+  clienteId        Int        @map("cliente_id")
+  codice           String?    @db.VarChar(50)
+  nome             String     @db.VarChar(200)
+  descrizione      String?    @db.Text
+  tipoBudget       TipoBudget @default(CONSUNTIVO) @map("tipo_budget")
+  dataInizio       DateTime?  @map("data_inizio") @db.Date
+  dataFinePrevista DateTime?  @map("data_fine_prevista") @db.Date
+  attivo           Boolean    @default(true)
+  note             String?    @db.Text
+  createdAt        DateTime   @default(now()) @map("created_at") @db.Timestamptz
 
   committente Committente     @relation(fields: [committenteId], references: [id])
   cliente     Cliente         @relation(fields: [clienteId], references: [id])
   stime       ProgettoStima[]
   attivita    Attivita[]
+  allegati    Allegato[]
 
   @@index([committenteId])
   @@index([clienteId])
@@ -162,9 +163,9 @@ model Progetto {
 model ProgettoStima {
   id             Int     @id @default(autoincrement())
   progettoId     Int     @map("progetto_id")
-  tipoAttivitaId Int     @db.SmallInt @map("tipo_attivita_id")
-  giorniStimati  Decimal @db.Decimal(8, 2) @map("giorni_stimati")
-  orePerGiorno   Decimal @default(8.00) @db.Decimal(4, 2) @map("ore_per_giorno")
+  tipoAttivitaId Int     @map("tipo_attivita_id") @db.SmallInt
+  giorniStimati  Decimal @map("giorni_stimati") @db.Decimal(8, 2)
+  orePerGiorno   Decimal @default(8.00) @map("ore_per_giorno") @db.Decimal(4, 2)
 
   progetto     Progetto     @relation(fields: [progettoId], references: [id], onDelete: Cascade)
   tipoAttivita TipoAttivita @relation(fields: [tipoAttivitaId], references: [id])
@@ -177,22 +178,22 @@ model ProgettoStima {
 
 model Attivita {
   id             BigInt   @id @default(autoincrement())
-  dataAttivita   DateTime @db.Date @map("data_attivita")
-  oraInizio      DateTime @db.Time() @map("ora_inizio")
-  oraFine        DateTime @db.Time() @map("ora_fine")
+  dataAttivita   DateTime @map("data_attivita") @db.Date
+  oraInizio      DateTime @map("ora_inizio") @db.Time()
+  oraFine        DateTime @map("ora_fine") @db.Time()
   // durata_minuti è computed: calcolato in app da oraFine - oraInizio
   committenteId  Int      @map("committente_id")
   clienteId      Int?     @map("cliente_id")
   progettoId     Int?     @map("progetto_id")
-  tipoAttivitaId Int      @db.SmallInt @map("tipo_attivita_id")
+  tipoAttivitaId Int      @map("tipo_attivita_id") @db.SmallInt
   descrizione    String?  @db.Text
-  noteInterne    String?  @db.Text @map("note_interne")
+  noteInterne    String?  @map("note_interne") @db.Text
   fatturabile    Boolean  @default(true)
-  oreErogate     Int?     @db.SmallInt @map("ore_erogate")
-  prezzoUnitario Decimal? @db.Decimal(10,4) @map("prezzo_unitario")
-  valoreAttivita Decimal? @db.Decimal(10,2) @map("valore_attivita")
+  oreErogate     Int?     @map("ore_erogate") @db.SmallInt
+  prezzoUnitario Decimal? @map("prezzo_unitario") @db.Decimal(10, 4)
+  valoreAttivita Decimal? @map("valore_attivita") @db.Decimal(10, 2)
   createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt      DateTime @updatedAt      @map("updated_at") @db.Timestamptz
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz
 
   committente  Committente  @relation(fields: [committenteId], references: [id])
   cliente      Cliente?     @relation(fields: [clienteId], references: [id])
@@ -215,11 +216,11 @@ model Spesa {
   attivitaId        BigInt    @map("attivita_id")
   tipoSpesa         TipoSpesa @map("tipo_spesa")
   descrizione       String?   @db.VarChar(300)
-  quantita          Decimal?  @db.Decimal(10, 3)         // per KM: numero km
-  importoUnitario   Decimal?  @db.Decimal(10, 4) @map("importo_unitario")  // €/km
-  importoTotale     Decimal   @db.Decimal(10, 2) @map("importo_totale")
+  quantita          Decimal?  @db.Decimal(10, 3) // per KM: numero km
+  importoUnitario   Decimal?  @map("importo_unitario") @db.Decimal(10, 4) // €/km
+  importoTotale     Decimal   @map("importo_totale") @db.Decimal(10, 2)
   valuta            String    @default("EUR") @db.Char(3)
-  dataSpesa         DateTime  @db.Date @map("data_spesa")
+  dataSpesa         DateTime  @map("data_spesa") @db.Date
   rimborsoRichiesto Boolean   @default(true) @map("rimborso_richiesto")
   createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz
 
@@ -233,13 +234,13 @@ model Spesa {
 // ─── BACKUP LOG ────────────────────────────────────────────
 
 model BackupLog {
-  id             Int      @id @default(autoincrement())
-  filename       String   @db.VarChar(255)
-  filePath       String?  @db.VarChar(500) @map("file_path")
-  fileSizeBytes  Int?     @map("file_size_bytes")
-  status         String   @default("success") @db.VarChar(20)
-  errorMessage   String?  @db.Text @map("error_message")
-  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
+  id            Int      @id @default(autoincrement())
+  filename      String   @db.VarChar(255)
+  filePath      String?  @map("file_path") @db.VarChar(500)
+  fileSizeBytes Int?     @map("file_size_bytes")
+  status        String   @default("success") @db.VarChar(20)
+  errorMessage  String?  @map("error_message") @db.Text
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz
 
   @@map("backup_log")
 }
@@ -247,21 +248,26 @@ model BackupLog {
 // ─── ALLEGATI ──────────────────────────────────────────────
 
 model Allegato {
-  id              BigInt   @id @default(autoincrement())
-  spesaId         BigInt?  @map("spesa_id")
-  attivitaId      BigInt?  @map("attivita_id")
-  nomeFile        String   @db.VarChar(255) @map("nome_file")
-  tipoMime        String?  @db.VarChar(100) @map("tipo_mime")
-  dimensioneBytes Int?     @map("dimensione_bytes")
-  storageKey      String   @db.VarChar(500) @map("storage_key")
-  storageUrl      String?  @db.VarChar(1000) @map("storage_url")
-  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz
+  id              BigInt    @id @default(autoincrement())
+  spesaId         BigInt?   @map("spesa_id")
+  attivitaId      BigInt?   @map("attivita_id")
+  progettoId      Int?      @map("progetto_id")
+  descrizione     String?   @db.Text
+  dataAllegato    DateTime? @map("data_allegato") @db.Date
+  nomeFile        String    @map("nome_file") @db.VarChar(255)
+  tipoMime        String?   @map("tipo_mime") @db.VarChar(100)
+  dimensioneBytes Int?      @map("dimensione_bytes")
+  storageKey      String    @map("storage_key") @db.VarChar(500)
+  storageUrl      String?   @map("storage_url") @db.VarChar(1000)
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz
 
   spesa    Spesa?    @relation(fields: [spesaId], references: [id], onDelete: Cascade)
   attivita Attivita? @relation(fields: [attivitaId], references: [id], onDelete: Cascade)
+  progetto Progetto? @relation(fields: [progettoId], references: [id], onDelete: Cascade)
 
   @@index([spesaId])
   @@index([attivitaId])
+  @@index([progettoId])
   @@map("allegato")
 }
 
@@ -270,7 +276,7 @@ model Allegato {
 model Ente {
   id        Int      @id @default(autoincrement())
   nome      String   @db.VarChar(200)
-  nomeNorm  String   @db.VarChar(200) @map("nome_norm")
+  nomeNorm  String   @map("nome_norm") @db.VarChar(200)
   categoria String?  @db.VarChar(100)
   note      String?  @db.Text
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
@@ -294,7 +300,7 @@ model EnteCategoria {
 model ContoBanca {
   id           Int      @id @default(autoincrement())
   banca        String   @db.VarChar(100)
-  numeroConto  String   @db.VarChar(50) @map("numero_conto")
+  numeroConto  String   @map("numero_conto") @db.VarChar(50)
   iban         String?  @db.VarChar(34)
   intestatario String?  @db.VarChar(200)
   attivo       Boolean  @default(true)
@@ -308,14 +314,14 @@ model ContoBanca {
 model MovimentoBancario {
   id             BigInt    @id @default(autoincrement())
   contoId        Int       @map("conto_id")
-  dataOperazione DateTime  @db.Date @map("data_operazione")
-  dataValuta     DateTime? @db.Date @map("data_valuta")
+  dataOperazione DateTime  @map("data_operazione") @db.Date
+  dataValuta     DateTime? @map("data_valuta") @db.Date
   descrizione    String    @db.Text
   enteId         Int?      @map("ente_id")
   importo        Decimal   @db.Decimal(12, 2)
   categoria      String?   @db.VarChar(50)
   stato          String?   @db.VarChar(30)
-  hash           String    @db.VarChar(64) @map("hash")
+  hash           String    @map("hash") @db.VarChar(64)
   createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz
 
   conto ContoBanca @relation(fields: [contoId], references: [id])
@@ -337,8 +343,8 @@ model Todo {
   stato             StatoTodo    @default(APERTA)
   committenteId     Int?         @map("committente_id")
   clienteId         Int?         @map("cliente_id")
-  committenteLibero String?      @db.VarChar(200) @map("committente_libero")
-  clienteLibero     String?      @db.VarChar(200) @map("cliente_libero")
+  committenteLibero String?      @map("committente_libero") @db.VarChar(200)
+  clienteLibero     String?      @map("cliente_libero") @db.VarChar(200)
   scadenza          DateTime?    @db.Date
   note              String?      @db.Text
   createdAt         DateTime     @default(now()) @map("created_at") @db.Timestamptz

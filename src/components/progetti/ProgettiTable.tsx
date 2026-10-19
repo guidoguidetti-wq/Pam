@@ -5,7 +5,7 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { toast } from 'sonner'
-import { Plus, Pencil, Trash2, ChevronDown, ChevronUp } from 'lucide-react'
+import { Plus, Pencil, Trash2, ChevronDown, ChevronUp, Paperclip } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
@@ -14,6 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge'
 import { Switch } from '@/components/ui/switch'
 import { cn, formatOre } from '@/lib/utils'
+import ProgettoAllegatiDialog from '@/components/progetti/ProgettoAllegatiDialog'
 
 type Committente = { id: number; ragioneSociale: string }
 type Cliente = { id: number; ragioneSociale: string }
@@ -42,7 +43,7 @@ type Progetto = {
   committente: { id: number; ragioneSociale: string }
   cliente: { id: number; ragioneSociale: string }
   stime: Stima[]
-  _count: { attivita: number }
+  _count: { attivita: number; allegati: number }
   oreErogateTotale: number
   oreStimaTotale: number
 }
@@ -82,6 +83,7 @@ export default function ProgettiTable({
   const [editing, setEditing] = useState<Progetto | null>(null)
   const [loading, setLoading] = useState(false)
   const [expandedId, setExpandedId] = useState<number | null>(null)
+  const [allegatiProgetto, setAllegatiProgetto] = useState<Progetto | null>(null)
 
   // Stime nel form: mappa tipoAttivitaId → { giorni, ore }
   const [stimeForm, setStimeForm] = useState<Record<number, { giorni: string; ore: string }>>({})
@@ -336,6 +338,18 @@ export default function ProgettiTable({
                     </td>
                     <td className="px-3 py-1.5">
                       <div className="flex items-center gap-1 justify-end">
+                        <button
+                          onClick={() => setAllegatiProgetto(p)}
+                          title="Allegati"
+                          className="relative p-1.5 rounded hover:bg-accent text-muted-foreground hover:text-foreground"
+                        >
+                          <Paperclip className="h-3.5 w-3.5" />
+                          {p._count.allegati > 0 && (
+                            <span className="absolute -top-0.5 -right-0.5 min-w-3.5 h-3.5 px-0.5 rounded-full bg-primary text-primary-foreground text-[9px] leading-[14px] text-center">
+                              {p._count.allegati}
+                            </span>
+                          )}
+                        </button>
                         <button onClick={() => openEdit(p)} className="p-1.5 rounded hover:bg-accent text-muted-foreground hover:text-foreground">
                           <Pencil className="h-3.5 w-3.5" />
                         </button>
@@ -377,6 +391,16 @@ export default function ProgettiTable({
           </table>
         </div>
       )}
+
+      {/* Dialog allegati */}
+      <ProgettoAllegatiDialog
+        progetto={allegatiProgetto}
+        open={allegatiProgetto !== null}
+        onOpenChange={o => { if (!o) setAllegatiProgetto(null) }}
+        onCountChange={(id, count) =>
+          setProgetti(prev => prev.map(x => x.id === id ? { ...x, _count: { ...x._count, allegati: count } } : x))
+        }
+      />
 
       {/* Dialog form */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>

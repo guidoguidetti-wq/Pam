@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
+import { del } from '@vercel/blob'
 import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
 
@@ -59,7 +60,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
             include: { tipoAttivita: { select: { id: true, codice: true, descrizione: true } } },
             orderBy: { tipoAttivitaId: 'asc' },
           },
-          _count: { select: { attivita: true } },
+          _count: { select: { attivita: true, allegati: true } },
         },
       })
     })
@@ -79,7 +80,10 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
   try {
     const progetto = await prisma.progetto.findUnique({
       where: { id: parseInt(id) },
-      include: { _count: { select: { attivita: true } } },
+      include: {
+        _count: { select: { attivita: true } },
+        allegati: { select: { storageUrl: true } },
+      },
     })
     if (!progetto) return NextResponse.json({ error: 'Progetto non trovato' }, { status: 404 })
     if (progetto._count.attivita > 0)
@@ -87,6 +91,10 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
         { error: 'Impossibile eliminare: il progetto ha attività collegate' },
         { status: 409 }
       )
+
+    // I record allegato vanno in cascade, i file su Blob vanno rimossi a mano
+    const urls = progetto.allegati.map(a => a.storageUrl).filter((u): u is string => !!u)
+    if (urls.length > 0) await del(urls)
 
     await prisma.progetto.delete({ where: { id: parseInt(id) } })
     return new NextResponse(null, { status: 204 })

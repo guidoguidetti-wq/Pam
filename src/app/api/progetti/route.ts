@@ -44,7 +44,7 @@ export async function GET(req: NextRequest) {
         include: { tipoAttivita: { select: { id: true, codice: true, descrizione: true } } },
         orderBy: { tipoAttivitaId: 'asc' },
       },
-      _count: { select: { attivita: true } },
+      _count: { select: { attivita: true, allegati: true } },
     },
   })
 
@@ -105,7 +105,7 @@ export async function POST(req: NextRequest) {
           include: { tipoAttivita: { select: { id: true, codice: true, descrizione: true } } },
           orderBy: { tipoAttivitaId: 'asc' },
         },
-        _count: { select: { attivita: true } },
+        _count: { select: { attivita: true, allegati: true } },
       },
     })
     return NextResponse.json(result, { status: 201 })
