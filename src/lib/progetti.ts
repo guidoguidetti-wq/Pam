@@ -55,7 +55,7 @@ export const progettoInclude = {
     include: { tipoAttivita: { select: { id: true, codice: true, descrizione: true } } },
     orderBy: { tipoAttivitaId: 'asc' },
   },
-  _count: { select: { attivita: true, allegati: true } },
+  _count: { select: { attivita: true, allegati: true, stimeDettaglio: true } },
 } satisfies Prisma.ProgettoInclude
 
 type ProgettoConRelazioni = Prisma.ProgettoGetPayload<{ include: typeof progettoInclude }>

@@ -55,10 +55,11 @@ model TipoAttivita {
   descrizione String  @db.VarChar(100)
   attivo      Boolean @default(true)
 
-  listino       Listino[]
-  progettoStime ProgettoStima[]
-  progettiTipi  ProgettoTipoAttivita[]
-  attivita      Attivita[]
+  listino        Listino[]
+  progettoStime  ProgettoStima[]
+  progettiTipi   ProgettoTipoAttivita[]
+  stimeDettaglio ProgettoStimaDettaglio[]
+  attivita       Attivita[]
 
   @@map("tipo_attivita")
 }
@@ -151,12 +152,13 @@ model Progetto {
   note             String?    @db.Text
   createdAt        DateTime   @default(now()) @map("created_at") @db.Timestamptz
 
-  committente  Committente            @relation(fields: [committenteId], references: [id])
-  cliente      Cliente                @relation(fields: [clienteId], references: [id])
-  stime        ProgettoStima[]
-  tipiAttivita ProgettoTipoAttivita[]
-  attivita     Attivita[]
-  allegati     Allegato[]
+  committente    Committente              @relation(fields: [committenteId], references: [id])
+  cliente        Cliente                  @relation(fields: [clienteId], references: [id])
+  stime          ProgettoStima[]
+  tipiAttivita   ProgettoTipoAttivita[]
+  stimeDettaglio ProgettoStimaDettaglio[]
+  attivita       Attivita[]
+  allegati       Allegato[]
 
   @@index([committenteId])
   @@index([clienteId])
@@ -174,6 +176,25 @@ model ProgettoTipoAttivita {
   @@id([progettoId, tipoAttivitaId])
   @@index([tipoAttivitaId])
   @@map("progetto_tipo_attivita")
+}
+
+// Dettaglio stime del progetto: tutte le attività (anche erogate da altre persone),
+// indipendente dai tipi previsti dal progetto
+model ProgettoStimaDettaglio {
+  id             Int      @id @default(autoincrement())
+  progettoId     Int      @map("progetto_id")
+  tipoAttivitaId Int      @map("tipo_attivita_id") @db.SmallInt
+  descrizione    String?  @db.Text
+  giorni         Decimal  @db.Decimal(8, 2)
+  ordine         Int      @default(0)
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  progetto     Progetto     @relation(fields: [progettoId], references: [id], onDelete: Cascade)
+  tipoAttivita TipoAttivita @relation(fields: [tipoAttivitaId], references: [id])
+
+  @@index([progettoId])
+  @@index([tipoAttivitaId])
+  @@map("progetto_stima_dettaglio")
 }
 
 model ProgettoStima {

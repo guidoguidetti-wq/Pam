@@ -5,7 +5,8 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { toast } from 'sonner'
-import { Plus, Pencil, Trash2, ChevronDown, ChevronUp, Paperclip } from 'lucide-react'
+import Link from 'next/link'
+import { Plus, Pencil, Trash2, ChevronDown, ChevronUp, Paperclip, Calculator } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
@@ -54,7 +55,7 @@ type Progetto = {
   stime: Stima[]
   tipiAttivita: { tipoAttivitaId: number; tipoAttivita: { id: number; codice: string; descrizione: string } }[]
   orePerTipo: OrePerTipo[]
-  _count: { attivita: number; allegati: number }
+  _count: { attivita: number; allegati: number; stimeDettaglio: number }
   oreErogateTotale: number
   oreStimaTotale: number
 }
@@ -382,6 +383,18 @@ export default function ProgettiTable({
                     </td>
                     <td className="px-3 py-1.5">
                       <div className="flex items-center gap-1 justify-end">
+                        <Link
+                          href={`/progetti/${p.id}/stime`}
+                          title="Dettaglio stime"
+                          className="relative p-1.5 rounded hover:bg-accent text-muted-foreground hover:text-foreground"
+                        >
+                          <Calculator className="h-3.5 w-3.5" />
+                          {p._count.stimeDettaglio > 0 && (
+                            <span className="absolute -top-0.5 -right-0.5 min-w-3.5 h-3.5 px-0.5 rounded-full bg-primary text-primary-foreground text-[9px] leading-[14px] text-center">
+                              {p._count.stimeDettaglio}
+                            </span>
+                          )}
+                        </Link>
                         <button
                           onClick={() => setAllegatiProgetto(p)}
                           title="Allegati"
