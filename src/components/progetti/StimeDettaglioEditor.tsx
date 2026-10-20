@@ -6,9 +6,10 @@ import { useFieldArray, useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { toast } from 'sonner'
-import { ArrowLeft, Plus, Save, Trash2, Loader2 } from 'lucide-react'
+import { ArrowLeft, Plus, Save, Trash2, Loader2, FileSpreadsheet } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Switch } from '@/components/ui/switch'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { cn } from '@/lib/utils'
 
@@ -33,7 +34,12 @@ const rigaSchema = z.object({
     .refine(v => !isNaN(parseFloat(v.replace(',', '.'))) && parseFloat(v.replace(',', '.')) >= 0, 'Valore non valido'),
 })
 
-const formSchema = z.object({ righe: z.array(rigaSchema) })
+const formSchema = z.object({
+  righe: z.array(rigaSchema),
+  stimeInviate: z.boolean(),
+  stimeAccettate: z.boolean(),
+  stimeNote: z.string().max(10000).optional(),
+})
 
 type FormData = z.infer<typeof formSchema>
 type RigaForm = FormData['righe'][number]
@@ -53,20 +59,24 @@ export default function StimeDettaglioEditor({
   progetto,
   tipiAttivita,
   righeIniziali,
+  statoIniziale,
 }: {
   progetto: ProgettoInfo
   tipiAttivita: TipoAttivita[]
   righeIniziali: RigaForm[]
+  statoIniziale: { stimeInviate: boolean; stimeAccettate: boolean; stimeNote: string }
 }) {
   const [saving, setSaving] = useState(false)
   const tipiProgetto = useMemo(() => new Set(progetto.tipiProgetto), [progetto.tipiProgetto])
 
   const { register, control, handleSubmit, watch, setValue, reset, formState: { errors, isDirty } } = useForm<FormData>({
     resolver: zodResolver(formSchema),
-    defaultValues: { righe: righeIniziali },
+    defaultValues: { righe: righeIniziali, ...statoIniziale },
   })
   const { fields, append, remove } = useFieldArray({ control, name: 'righe' })
   const righe = watch('righe')
+  const stimeInviate = watch('stimeInviate')
+  const stimeAccettate = watch('stimeAccettate')
 
   // Avvisa se si esce dalla pagina con modifiche non salvate
   useEffect(() => {
@@ -100,15 +110,26 @@ export default function StimeDettaglioEditor({
             descrizione: r.descrizione || null,
             giorni: num(r.giorni),
           })),
+          stimeInviate: data.stimeInviate,
+          stimeAccettate: data.stimeAccettate,
+          stimeNote: data.stimeNote || null,
         }),
       })
       if (!res.ok) {
         toast.error((await res.json()).error ?? 'Errore salvataggio')
         return
       }
-      const saved: { tipoAttivitaId: number; descrizione: string | null; giorni: string }[] = await res.json()
+      const saved: {
+        righe: { tipoAttivitaId: number; descrizione: string | null; giorni: string }[]
+        stimeInviate: boolean
+        stimeAccettate: boolean
+        stimeNote: string | null
+      } = await res.json()
       reset({
-        righe: saved.map(r => ({
+        stimeInviate: saved.stimeInviate,
+        stimeAccettate: saved.stimeAccettate,
+        stimeNote: saved.stimeNote ?? '',
+        righe: saved.righe.map(r => ({
           tipoAttivitaId: String(r.tipoAttivitaId),
           descrizione: r.descrizione ?? '',
           giorni: String(parseFloat(r.giorni)),
@@ -136,6 +157,18 @@ export default function StimeDettaglioEditor({
           <p className="text-xs text-muted-foreground">{progetto.committente} › {progetto.cliente}</p>
         </div>
         <div className="ml-auto flex items-center gap-2">
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={() => {
+              if (isDirty) { toast.warning('Salva le modifiche prima di esportare'); return }
+              window.location.href = `/api/progetti/${progetto.id}/stime-dettaglio/export`
+            }}
+          >
+            <FileSpreadsheet className="h-4 w-4 mr-1.5" />
+            Export
+          </Button>
           <Button type="button" size="sm" variant="outline" onClick={() => append(nuovaRiga)}>
             <Plus className="h-4 w-4 mr-1.5" />
             Aggiungi riga
@@ -145,6 +178,30 @@ export default function StimeDettaglioEditor({
             {saving ? 'Salvataggio…' : 'Salva'}
           </Button>
         </div>
+      </div>
+
+      {/* Stato stime */}
+      <div className="border rounded-lg p-3 grid gap-3 sm:grid-cols-[auto_auto_1fr] items-start">
+        <label className="flex items-center gap-2 text-sm cursor-pointer pt-1">
+          <Switch
+            checked={stimeInviate}
+            onCheckedChange={v => setValue('stimeInviate', v, { shouldDirty: true })}
+          />
+          Inviate
+        </label>
+        <label className="flex items-center gap-2 text-sm cursor-pointer pt-1">
+          <Switch
+            checked={stimeAccettate}
+            onCheckedChange={v => setValue('stimeAccettate', v, { shouldDirty: true })}
+          />
+          Accettate
+        </label>
+        <textarea
+          rows={2}
+          placeholder="Note sulle stime…"
+          className="w-full px-3 py-2 border rounded-md text-sm bg-background resize-y focus:outline-none focus:ring-2 focus:ring-ring"
+          {...register('stimeNote')}
+        />
       </div>
 
       <p className="text-xs text-muted-foreground">

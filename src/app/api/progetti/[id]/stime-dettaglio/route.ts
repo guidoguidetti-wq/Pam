@@ -14,7 +14,17 @@ const rigaSchema = z.object({
   giorni: z.coerce.number().min(0, 'Le giornate non possono essere negative').max(99999),
 })
 
-const schema = z.object({ righe: z.array(rigaSchema) })
+const schema = z.object({
+  righe: z.array(rigaSchema),
+  stimeInviate: z.boolean(),
+  stimeAccettate: z.boolean(),
+  stimeNote: z.preprocess(
+    (v) => (typeof v === 'string' && v.trim() === '' ? null : v),
+    z.string().max(10000).nullable().optional()
+  ),
+})
+
+const selectStato = { stimeInviate: true, stimeAccettate: true, stimeNote: true } as const
 
 const select = {
   id: true,
@@ -42,7 +52,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
   }
 }
 
-// Salva l'intero elenco: sostituisce le righe esistenti con quelle inviate
+// Salva l'intero elenco (sostituisce le righe esistenti) e lo stato inviate/accettate/note
 export async function PUT(req: NextRequest, { params }: Params) {
   const session = await auth()
   if (!session) return NextResponse.json({ error: 'Non autorizzato' }, { status: 401 })
@@ -58,10 +68,16 @@ export async function PUT(req: NextRequest, { params }: Params) {
     const progetto = await prisma.progetto.findUnique({ where: { id: progettoId }, select: { id: true } })
     if (!progetto) return NextResponse.json({ error: 'Progetto non trovato' }, { status: 404 })
 
-    const righe = await prisma.$transaction(async (tx) => {
+    const { righe: righeInput, ...stato } = parsed.data
+    const result = await prisma.$transaction(async (tx) => {
+      const statoSalvato = await tx.progetto.update({
+        where: { id: progettoId },
+        data: { ...stato, stimeNote: stato.stimeNote ?? null },
+        select: selectStato,
+      })
       await tx.progettoStimaDettaglio.deleteMany({ where: { progettoId } })
       await tx.progettoStimaDettaglio.createMany({
-        data: parsed.data.righe.map((r, i) => ({
+        data: righeInput.map((r, i) => ({
           progettoId,
           tipoAttivitaId: r.tipoAttivitaId,
           descrizione: r.descrizione ?? null,
@@ -69,13 +85,14 @@ export async function PUT(req: NextRequest, { params }: Params) {
           ordine: i,
         })),
       })
-      return tx.progettoStimaDettaglio.findMany({
+      const righe = await tx.progettoStimaDettaglio.findMany({
         where: { progettoId },
         orderBy: [{ ordine: 'asc' }, { id: 'asc' }],
         select,
       })
+      return { righe, ...statoSalvato }
     })
-    return NextResponse.json(righe)
+    return NextResponse.json(result)
   } catch (err) {
     console.error(err)
     return NextResponse.json({ error: 'Errore interno' }, { status: 500 })

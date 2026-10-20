@@ -59,6 +59,8 @@ interface AttivitaRow {
 interface AttivitaTableProps {
   committenti: Committente[]
   tipiAttivita: TipoAttivita[]
+  /** Se valorizzato mostra solo le attività del progetto, senza limite di date */
+  progettoId?: number
 }
 
 function primoGiornoAnno(): string {
@@ -69,12 +71,12 @@ function fineAnno(): string {
   return `${new Date().getFullYear()}-12-31`
 }
 
-export function AttivitaTable({ committenti: _committenti, tipiAttivita: initialTipi }: AttivitaTableProps) {
+export function AttivitaTable({ committenti: _committenti, tipiAttivita: initialTipi, progettoId }: AttivitaTableProps) {
   const [tipiAttivita, setTipiAttivita] = useState(initialTipi)
   const [attivita, setAttivita] = useState<AttivitaRow[]>([])
   const [loading, setLoading] = useState(false)
-  const [from, setFrom] = useState(primoGiornoAnno())
-  const [to, setTo] = useState(fineAnno())
+  const [from, setFrom] = useState(progettoId ? '' : primoGiornoAnno())
+  const [to, setTo] = useState(progettoId ? '' : fineAnno())
   const [tipiDialogOpen, setTipiDialogOpen] = useState(false)
   const [formDialogOpen, setFormDialogOpen] = useState(false)
   const [editId, setEditId] = useState<string | undefined>(undefined)
@@ -89,7 +91,10 @@ export function AttivitaTable({ committenti: _committenti, tipiAttivita: initial
   const caricaAttivita = useCallback(async () => {
     setLoading(true)
     try {
-      const params = new URLSearchParams({ from, to })
+      const params = new URLSearchParams()
+      if (from) params.set('from', from)
+      if (to) params.set('to', to)
+      if (progettoId) params.set('progetto_id', String(progettoId))
       const res = await fetch(`/api/attivita?${params}`)
       if (!res.ok) { toast.error('Errore caricamento attività'); return }
       const data: AttivitaRow[] = await res.json()
@@ -97,7 +102,7 @@ export function AttivitaTable({ committenti: _committenti, tipiAttivita: initial
     } finally {
       setLoading(false)
     }
-  }, [from, to])
+  }, [from, to, progettoId])
 
   useEffect(() => { caricaAttivita() }, [caricaAttivita])
 
@@ -140,9 +145,10 @@ export function AttivitaTable({ committenti: _committenti, tipiAttivita: initial
     const wb = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(wb, ws, 'Attività')
 
-    const fromLabel = from.replace(/-/g, '')
-    const toLabel = to.replace(/-/g, '')
-    XLSX.writeFile(wb, `attivita-${fromLabel}-${toLabel}.xlsx`)
+    const fromLabel = from ? from.replace(/-/g, '') : 'inizio'
+    const toLabel = to ? to.replace(/-/g, '') : 'oggi'
+    const prefisso = progettoId ? `attivita-progetto-${progettoId}` : 'attivita'
+    XLSX.writeFile(wb, `${prefisso}-${fromLabel}-${toLabel}.xlsx`)
   }
 
   async function handleDeleteRow(id: string) {
@@ -251,7 +257,7 @@ export function AttivitaTable({ committenti: _committenti, tipiAttivita: initial
         </div>
       ) : attivita.length === 0 ? (
         <div className="text-center text-muted-foreground py-10">
-          Nessuna attività nel periodo selezionato
+          {progettoId ? 'Nessuna attività registrata sul progetto' : 'Nessuna attività nel periodo selezionato'}
         </div>
       ) : (
         <div className="overflow-x-auto rounded-md border">

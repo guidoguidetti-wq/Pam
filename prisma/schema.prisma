@@ -150,6 +150,10 @@ model Progetto {
   dataFinePrevista DateTime?  @map("data_fine_prevista") @db.Date
   attivo           Boolean    @default(true)
   note             String?    @db.Text
+  // Stato del dettaglio stime (pagina /progetti/[id]/stime)
+  stimeInviate     Boolean    @default(false) @map("stime_inviate")
+  stimeAccettate   Boolean    @default(false) @map("stime_accettate")
+  stimeNote        String?    @map("stime_note") @db.Text
   createdAt        DateTime   @default(now()) @map("created_at") @db.Timestamptz
 
   committente    Committente              @relation(fields: [committenteId], references: [id])

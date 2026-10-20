@@ -27,6 +27,9 @@ export default async function StimeDettaglioPage({ params }: { params: Promise<{
         committente: { select: { ragioneSociale: true } },
         cliente: { select: { ragioneSociale: true } },
         tipiAttivita: { select: { tipoAttivitaId: true } },
+        stimeInviate: true,
+        stimeAccettate: true,
+        stimeNote: true,
       },
     }),
     // Tutti i tipi attività (non solo quelli previsti dal progetto)
@@ -56,6 +59,11 @@ export default async function StimeDettaglioPage({ params }: { params: Promise<{
             tipiProgetto: progetto.tipiAttivita.map(t => t.tipoAttivitaId),
           }}
           tipiAttivita={tipiAttivita}
+          statoIniziale={{
+            stimeInviate: progetto.stimeInviate,
+            stimeAccettate: progetto.stimeAccettate,
+            stimeNote: progetto.stimeNote ?? '',
+          }}
           righeIniziali={righe.map(r => ({
             tipoAttivitaId: String(r.tipoAttivitaId),
             descrizione: r.descrizione ?? '',

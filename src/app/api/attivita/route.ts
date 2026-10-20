@@ -108,6 +108,7 @@ export async function GET(req: NextRequest) {
   const from = searchParams.get('from')
   const to = searchParams.get('to')
   const committenteId = searchParams.get('committente_id')
+  const progettoId = searchParams.get('progetto_id')
 
   const attivita = await prisma.attivita.findMany({
     where: {
@@ -116,6 +117,7 @@ export async function GET(req: NextRequest) {
         ...(to ? { lte: new Date(to) } : {}),
       },
       ...(committenteId ? { committenteId: parseInt(committenteId) } : {}),
+      ...(progettoId ? { progettoId: parseInt(progettoId) } : {}),
     },
     include: includeRelations,
     orderBy: [{ dataAttivita: 'asc' }, { oraInizio: 'asc' }],

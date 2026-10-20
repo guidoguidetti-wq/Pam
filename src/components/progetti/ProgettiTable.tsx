@@ -6,7 +6,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { toast } from 'sonner'
 import Link from 'next/link'
-import { Plus, Pencil, Trash2, ChevronDown, ChevronUp, Paperclip, Calculator } from 'lucide-react'
+import { Plus, Pencil, Trash2, ChevronDown, ChevronUp, Paperclip, Calculator, ListChecks } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
@@ -383,6 +383,13 @@ export default function ProgettiTable({
                     </td>
                     <td className="px-3 py-1.5">
                       <div className="flex items-center gap-1 justify-end">
+                        <Link
+                          href={`/progetti/${p.id}/attivita`}
+                          title="Attività del progetto"
+                          className="p-1.5 rounded hover:bg-accent text-muted-foreground hover:text-foreground"
+                        >
+                          <ListChecks className="h-3.5 w-3.5" />
+                        </Link>
                         <Link
                           href={`/progetti/${p.id}/stime`}
                           title="Dettaglio stime"
