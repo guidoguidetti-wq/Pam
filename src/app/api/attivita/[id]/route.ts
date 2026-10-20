@@ -4,6 +4,7 @@ import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
 import { coloreCommittente } from '@/lib/utils'
 import { getTariffa } from '@/lib/tariffe'
+import { verificaTipoProgetto } from '@/lib/progetti'
 
 function minsToHHMM(mins: number): string {
   return `${String(Math.floor(mins / 60)).padStart(2, '0')}:${String(mins % 60).padStart(2, '0')}`
@@ -122,6 +123,11 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     return NextResponse.json({ error: 'Dati non validi', details: parsed.error.issues }, { status: 422 })
 
   const { dataAttivita, oraInizio, oraFine, oreErogate, prezzoUnitario, valoreAttivita, ...rest } = parsed.data
+
+  if (rest.progettoId) {
+    const erroreTipo = await verificaTipoProgetto(rest.progettoId, rest.tipoAttivitaId)
+    if (erroreTipo) return NextResponse.json({ error: erroreTipo }, { status: 422 })
+  }
 
   try {
     let finalOraInizio: string, finalOraFine: string, finalOreErogate: number

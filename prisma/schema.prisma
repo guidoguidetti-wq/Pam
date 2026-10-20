@@ -57,6 +57,7 @@ model TipoAttivita {
 
   listino       Listino[]
   progettoStime ProgettoStima[]
+  progettiTipi  ProgettoTipoAttivita[]
   attivita      Attivita[]
 
   @@map("tipo_attivita")
@@ -150,15 +151,29 @@ model Progetto {
   note             String?    @db.Text
   createdAt        DateTime   @default(now()) @map("created_at") @db.Timestamptz
 
-  committente Committente     @relation(fields: [committenteId], references: [id])
-  cliente     Cliente         @relation(fields: [clienteId], references: [id])
-  stime       ProgettoStima[]
-  attivita    Attivita[]
-  allegati    Allegato[]
+  committente  Committente            @relation(fields: [committenteId], references: [id])
+  cliente      Cliente                @relation(fields: [clienteId], references: [id])
+  stime        ProgettoStima[]
+  tipiAttivita ProgettoTipoAttivita[]
+  attivita     Attivita[]
+  allegati     Allegato[]
 
   @@index([committenteId])
   @@index([clienteId])
   @@map("progetto")
+}
+
+// Tipi attività ammessi nel progetto (un progetto può contenere più tipi)
+model ProgettoTipoAttivita {
+  progettoId     Int @map("progetto_id")
+  tipoAttivitaId Int @map("tipo_attivita_id") @db.SmallInt
+
+  progetto     Progetto     @relation(fields: [progettoId], references: [id], onDelete: Cascade)
+  tipoAttivita TipoAttivita @relation(fields: [tipoAttivitaId], references: [id])
+
+  @@id([progettoId, tipoAttivitaId])
+  @@index([tipoAttivitaId])
+  @@map("progetto_tipo_attivita")
 }
 
 model ProgettoStima {

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { Fragment, useEffect, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -13,6 +13,7 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
 import { Switch } from '@/components/ui/switch'
+import { Checkbox } from '@/components/ui/checkbox'
 import { cn, formatOre } from '@/lib/utils'
 import ProgettoAllegatiDialog from '@/components/progetti/ProgettoAllegatiDialog'
 
@@ -26,6 +27,14 @@ type Stima = {
   giorniStimati: string
   orePerGiorno: string
   tipoAttivita: { id: number; codice: string; descrizione: string }
+}
+
+type OrePerTipo = {
+  tipoAttivitaId: number
+  codice: string
+  descrizione: string
+  oreErogate: number
+  oreStimate: number
 }
 
 type Progetto = {
@@ -43,6 +52,8 @@ type Progetto = {
   committente: { id: number; ragioneSociale: string }
   cliente: { id: number; ragioneSociale: string }
   stime: Stima[]
+  tipiAttivita: { tipoAttivitaId: number; tipoAttivita: { id: number; codice: string; descrizione: string } }[]
+  orePerTipo: OrePerTipo[]
   _count: { attivita: number; allegati: number }
   oreErogateTotale: number
   oreStimaTotale: number
@@ -87,6 +98,8 @@ export default function ProgettiTable({
 
   // Stime nel form: mappa tipoAttivitaId → { giorni, ore }
   const [stimeForm, setStimeForm] = useState<Record<number, { giorni: string; ore: string }>>({})
+  // Tipi attività selezionati nel form
+  const [tipiSel, setTipiSel] = useState<Set<number>>(new Set())
 
   const { register, handleSubmit, watch, setValue, reset, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(formSchema),
@@ -128,6 +141,7 @@ export default function ProgettiTable({
       note: '',
     })
     setStimeForm({})
+    setTipiSel(new Set())
     setEditing(null)
     setDialogOpen(true)
   }
@@ -154,12 +168,23 @@ export default function ProgettiTable({
       }
     })
     setStimeForm(sf)
+    setTipiSel(new Set([...p.tipiAttivita.map(t => t.tipoAttivitaId), ...p.stime.map(s => s.tipoAttivitaId)]))
     setEditing(p)
     setDialogOpen(true)
   }
 
+  function toggleTipo(id: number, on: boolean) {
+    setTipiSel(prev => {
+      const next = new Set(prev)
+      if (on) next.add(id)
+      else next.delete(id)
+      return next
+    })
+  }
+
   function buildStime() {
     return tipiAttivita
+      .filter(t => tipiSel.has(t.id))
       .filter(t => {
         const g = parseFloat(stimeForm[t.id]?.giorni ?? '0')
         return g > 0
@@ -174,6 +199,10 @@ export default function ProgettiTable({
   async function onSubmit(data: FormData) {
     setLoading(true)
     try {
+      if (tipiSel.size === 0) {
+        toast.error('Seleziona almeno un tipo attività')
+        return
+      }
       const stime = data.tipoBudget === 'STIMATO' ? buildStime() : []
       const payload = {
         ...data,
@@ -182,6 +211,7 @@ export default function ProgettiTable({
         dataInizio: data.dataInizio || null,
         dataFinePrevista: data.dataFinePrevista || null,
         note: data.note || null,
+        tipiAttivitaIds: [...tipiSel],
         stime,
       }
 
@@ -275,7 +305,8 @@ export default function ProgettiTable({
                 <th className="text-left px-3 py-1.5 font-medium w-8"></th>
                 <th className="text-left px-3 py-1.5 font-medium">Progetto</th>
                 <th className="text-left px-3 py-1.5 font-medium hidden md:table-cell">Committente › Cliente</th>
-                <th className="text-left px-3 py-1.5 font-medium hidden sm:table-cell">Tipo</th>
+                <th className="text-left px-3 py-1.5 font-medium hidden sm:table-cell">Budget</th>
+                <th className="text-left px-3 py-1.5 font-medium hidden lg:table-cell">Tipi attività</th>
                 <th className="text-left px-3 py-1.5 font-medium hidden lg:table-cell">Date</th>
                 <th className="text-right px-3 py-1.5 font-medium hidden md:table-cell">Stimate</th>
                 <th className="text-right px-3 py-1.5 font-medium hidden md:table-cell">Erogate</th>
@@ -285,14 +316,14 @@ export default function ProgettiTable({
             </thead>
             <tbody className="divide-y">
               {progettiFiltrati.map(p => (
-                <>
+                <Fragment key={p.id}>
                   <tr
-                    key={p.id}
                     className={cn('hover:bg-muted/30', !p.attivo && 'opacity-50')}
                   >
                     <td className="px-3 py-1.5">
-                      {p.tipoBudget === 'STIMATO' && p.stime.length > 0 && (
+                      {p.orePerTipo.length > 0 && (
                         <button
+                          title="Dettaglio per tipo attività"
                           onClick={() => setExpandedId(expandedId === p.id ? null : p.id)}
                           className="text-muted-foreground hover:text-foreground"
                         >
@@ -314,6 +345,19 @@ export default function ProgettiTable({
                       <Badge variant={p.tipoBudget === 'STIMATO' ? 'default' : 'secondary'} className="text-xs">
                         {p.tipoBudget === 'STIMATO' ? 'Stimato' : 'Consuntivo'}
                       </Badge>
+                    </td>
+                    <td className="px-3 py-1.5 hidden lg:table-cell">
+                      <div className="flex flex-wrap gap-1">
+                        {p.tipiAttivita.map(t => (
+                          <span
+                            key={t.tipoAttivitaId}
+                            title={t.tipoAttivita.descrizione}
+                            className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-medium"
+                          >
+                            {t.tipoAttivita.codice}
+                          </span>
+                        ))}
+                      </div>
                     </td>
                     <td className="px-3 py-1.5 hidden lg:table-cell text-xs text-muted-foreground">
                       {formatDate(p.dataInizio)} {p.dataFinePrevista && `→ ${formatDate(p.dataFinePrevista)}`}
@@ -363,29 +407,56 @@ export default function ProgettiTable({
                       </div>
                     </td>
                   </tr>
-                  {/* Riga espansa: stime */}
+                  {/* Riga espansa: dettaglio per tipo attività */}
                   {expandedId === p.id && (
-                    <tr key={`${p.id}-stime`} className="bg-muted/20">
-                      <td colSpan={7} className="px-6 py-3">
-                        <div className="text-xs font-medium text-muted-foreground mb-2">Stime per tipo attività</div>
-                        <div className="flex flex-wrap gap-3">
-                          {p.stime.map(s => (
-                            <div key={s.id} className="bg-background border rounded px-3 py-2 text-xs">
-                              <span className="font-medium">{s.tipoAttivita.codice}</span>
-                              <span className="text-muted-foreground ml-1">· {s.tipoAttivita.descrizione}</span>
-                              <div className="mt-0.5 text-muted-foreground">
-                                {parseFloat(s.giorniStimati).toFixed(1)} gg × {parseFloat(s.orePerGiorno).toFixed(1)} h
-                                <span className="ml-1 font-medium text-foreground">
-                                  = {(parseFloat(s.giorniStimati) * parseFloat(s.orePerGiorno)).toFixed(1)} h
-                                </span>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
+                    <tr className="bg-muted/20">
+                      <td colSpan={10} className="px-6 py-3">
+                        <div className="text-xs font-medium text-muted-foreground mb-2">Ore per tipo attività</div>
+                        <table className="text-xs">
+                          <thead>
+                            <tr className="text-muted-foreground">
+                              <th className="text-left font-medium pr-6 py-0.5">Tipo</th>
+                              {p.tipoBudget === 'STIMATO' && <th className="text-right font-medium px-3 py-0.5">Stimate</th>}
+                              <th className="text-right font-medium px-3 py-0.5">Erogate</th>
+                              {p.tipoBudget === 'STIMATO' && <th className="text-right font-medium px-3 py-0.5">Residuo</th>}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {p.orePerTipo.map(r => {
+                              const residuo = r.oreStimate - r.oreErogate
+                              const previsto = p.tipiAttivita.some(t => t.tipoAttivitaId === r.tipoAttivitaId)
+                              return (
+                                <tr key={r.tipoAttivitaId}>
+                                  <td className="pr-6 py-0.5">
+                                    <span className="font-medium">{r.codice}</span>
+                                    <span className="text-muted-foreground ml-1">· {r.descrizione}</span>
+                                    {!previsto && <span className="ml-1 text-yellow-700">(non previsto)</span>}
+                                  </td>
+                                  {p.tipoBudget === 'STIMATO' && (
+                                    <td className="text-right px-3 py-0.5 text-muted-foreground">
+                                      {r.oreStimate > 0 ? formatOre(r.oreStimate) : '—'}
+                                    </td>
+                                  )}
+                                  <td className="text-right px-3 py-0.5 font-medium">
+                                    {r.oreErogate > 0 ? formatOre(r.oreErogate) : '—'}
+                                  </td>
+                                  {p.tipoBudget === 'STIMATO' && (
+                                    <td className={cn(
+                                      'text-right px-3 py-0.5 font-medium',
+                                      r.oreStimate > 0 && residuo < 0 ? 'text-red-600' : 'text-emerald-700'
+                                    )}>
+                                      {r.oreStimate > 0 ? (residuo < 0 ? '−' : '') + formatOre(Math.abs(residuo)) : '—'}
+                                    </td>
+                                  )}
+                                </tr>
+                              )
+                            })}
+                          </tbody>
+                        </table>
                       </td>
                     </tr>
                   )}
-                </>
+                </Fragment>
               ))}
             </tbody>
           </table>
@@ -496,54 +567,66 @@ export default function ProgettiTable({
               </Select>
             </div>
 
-            {/* Stime (solo STIMATO) */}
-            {watchTipoBudget === 'STIMATO' && (
-              <div className="space-y-2 border rounded-md p-3 bg-muted/20">
-                <div className="text-sm font-medium">Giorni stimati per tipo attività</div>
-                <div className="text-xs text-muted-foreground mb-2">Lascia vuoto i tipi non previsti in questo progetto.</div>
-                <div className="space-y-2">
-                  {tipiAttivita.map(t => (
-                    <div key={t.id} className="grid grid-cols-3 gap-2 items-center">
-                      <div className="text-xs font-medium col-span-1">
-                        {t.codice}
-                        <span className="text-muted-foreground font-normal ml-1">{t.descrizione}</span>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <Input
-                          type="number"
-                          step="0.5"
-                          min="0"
-                          placeholder="gg"
-                          className="h-7 text-xs"
-                          value={stimeForm[t.id]?.giorni ?? ''}
-                          onChange={e => setStimeForm(prev => ({
-                            ...prev,
-                            [t.id]: { giorni: e.target.value, ore: prev[t.id]?.ore ?? '8' }
-                          }))}
-                        />
-                        <span className="text-xs text-muted-foreground shrink-0">gg</span>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <Input
-                          type="number"
-                          step="0.5"
-                          min="1"
-                          max="24"
-                          placeholder="8"
-                          className="h-7 text-xs"
-                          value={stimeForm[t.id]?.ore ?? ''}
-                          onChange={e => setStimeForm(prev => ({
-                            ...prev,
-                            [t.id]: { giorni: prev[t.id]?.giorni ?? '', ore: e.target.value }
-                          }))}
-                        />
-                        <span className="text-xs text-muted-foreground shrink-0">h/g</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+            {/* Tipi attività del progetto (+ stime se STIMATO) */}
+            <div className="space-y-2 border rounded-md p-3 bg-muted/20">
+              <div className="text-sm font-medium">Tipi attività del progetto *</div>
+              <div className="text-xs text-muted-foreground mb-2">
+                {watchTipoBudget === 'STIMATO'
+                  ? 'Seleziona i tipi previsti e indica i giorni stimati per ciascuno.'
+                  : 'Seleziona i tipi di attività che possono essere registrati sul progetto.'}
               </div>
-            )}
+              <div className="space-y-1.5">
+                {tipiAttivita.map(t => {
+                  const checked = tipiSel.has(t.id)
+                  return (
+                    <div key={t.id} className="grid grid-cols-3 gap-2 items-center min-h-7">
+                      <label className="flex items-center gap-2 text-xs font-medium cursor-pointer col-span-1">
+                        <Checkbox checked={checked} onCheckedChange={v => toggleTipo(t.id, v === true)} />
+                        <span>
+                          {t.codice}
+                          <span className="text-muted-foreground font-normal ml-1">{t.descrizione}</span>
+                        </span>
+                      </label>
+                      {watchTipoBudget === 'STIMATO' && checked && (
+                        <>
+                          <div className="flex items-center gap-1">
+                            <Input
+                              type="number"
+                              step="0.5"
+                              min="0"
+                              placeholder="gg"
+                              className="h-7 text-xs"
+                              value={stimeForm[t.id]?.giorni ?? ''}
+                              onChange={e => setStimeForm(prev => ({
+                                ...prev,
+                                [t.id]: { giorni: e.target.value, ore: prev[t.id]?.ore ?? '8' }
+                              }))}
+                            />
+                            <span className="text-xs text-muted-foreground shrink-0">gg</span>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <Input
+                              type="number"
+                              step="0.5"
+                              min="1"
+                              max="24"
+                              placeholder="8"
+                              className="h-7 text-xs"
+                              value={stimeForm[t.id]?.ore ?? ''}
+                              onChange={e => setStimeForm(prev => ({
+                                ...prev,
+                                [t.id]: { giorni: prev[t.id]?.giorni ?? '', ore: e.target.value }
+                              }))}
+                            />
+                            <span className="text-xs text-muted-foreground shrink-0">h/g</span>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
 
             {/* Date */}
             <div className="grid grid-cols-2 gap-3">

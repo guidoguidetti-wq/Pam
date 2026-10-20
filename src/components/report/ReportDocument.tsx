@@ -211,6 +211,14 @@ const S = StyleSheet.create({
   cValore:   { width: 56 },
   cF:        { width: 14 },
   cS:        { width: 14 },
+  // Riepilogo progetto / tipo attivita (sum = 535)
+  riepTitle:    { fontSize: 8, fontFamily: 'Helvetica-Bold', color: MUTED, marginTop: 8, marginBottom: 3 },
+  rpProgetto:   { width: 190 },
+  rpTipo:       { width: 150 },
+  rpOre:        { width: 60 },
+  rpGiorni:     { width: 60 },
+  rpValore:     { width: 75 },
+  rpSubtotale:  { flexDirection: 'row', paddingVertical: 2.5, backgroundColor: LIGHT },
   // Totali cliente
   totaliRow: {
     flexDirection: 'row',
@@ -362,6 +370,67 @@ function AttivitaTable({ attivita }: { attivita: ReportAttivita[] }) {
           </Text>
         </View>
       ))}
+    </View>
+  )
+}
+
+// Riepilogo ore e valore per progetto e tipo attivita
+function RiepilogoProgettiTipi({ attivita }: { attivita: ReportAttivita[] }) {
+  if (!attivita.some(a => a.progetto)) return null
+
+  type Riga = { tipo: string; oreMin: number; valore: number }
+  const perProgetto = new Map<string, Map<string, Riga>>()
+  for (const a of attivita) {
+    const progetto = a.progetto ?? 'Senza progetto'
+    if (!perProgetto.has(progetto)) perProgetto.set(progetto, new Map())
+    const tipi = perProgetto.get(progetto)!
+    if (!tipi.has(a.tipoAttivita)) tipi.set(a.tipoAttivita, { tipo: a.tipoAttivita, oreMin: 0, valore: 0 })
+    const r = tipi.get(a.tipoAttivita)!
+    r.oreMin += a.oreErogate
+    r.valore += a.valoreAttivita ?? 0
+  }
+  // Progetti in ordine alfabetico, "Senza progetto" in fondo
+  const progetti = [...perProgetto.entries()].sort(([a], [b]) =>
+    a === 'Senza progetto' ? 1 : b === 'Senza progetto' ? -1 : a.localeCompare(b)
+  )
+
+  return (
+    <View wrap={false}>
+      <Text style={S.riepTitle}>Riepilogo per progetto e tipo attivita</Text>
+      <View style={S.tableHeader}>
+        <Text style={[S.hdrText, S.rpProgetto]}>Progetto</Text>
+        <Text style={[S.hdrText, S.rpTipo]}>Tipo attivita</Text>
+        <Text style={[S.hdrText, S.rpOre, { textAlign: 'right' }]}>Ore</Text>
+        <Text style={[S.hdrText, S.rpGiorni, { textAlign: 'right' }]}>Giorni</Text>
+        <Text style={[S.hdrText, S.rpValore, { textAlign: 'right' }]}>Valore</Text>
+      </View>
+      {progetti.map(([progetto, tipi]) => {
+        const righe = [...tipi.values()].sort((a, b) => a.tipo.localeCompare(b.tipo))
+        const totOre = righe.reduce((acc, r) => acc + r.oreMin, 0)
+        const totVal = righe.reduce((acc, r) => acc + r.valore, 0)
+        return (
+          <View key={progetto}>
+            {righe.map((r, i) => (
+              <View key={r.tipo} style={i % 2 === 0 ? S.tableRow : S.tableRowAlt}>
+                <Text style={[S.cellText, S.rpProgetto]}>{i === 0 ? progetto : ''}</Text>
+                <Text style={[S.cellText, S.rpTipo]}>{r.tipo}</Text>
+                <Text style={[S.cellRight, S.rpOre]}>{fmtOre(r.oreMin)}</Text>
+                <Text style={[S.cellRight, S.rpGiorni]}>{fmtGiorni(r.oreMin)}</Text>
+                <Text style={[S.cellRight, S.rpValore]}>{fmtEur(r.valore)}</Text>
+              </View>
+            ))}
+            {righe.length > 1 && (
+              <View style={S.rpSubtotale}>
+                <Text style={[S.cellText, S.rpProgetto]}></Text>
+                <Text style={[S.cellText, S.rpTipo, { fontFamily: 'Helvetica-Bold' }]}>Totale progetto</Text>
+                <Text style={[S.cellRight, S.rpOre, { fontFamily: 'Helvetica-Bold' }]}>{fmtOre(totOre)}</Text>
+                <Text style={[S.cellRight, S.rpGiorni, { fontFamily: 'Helvetica-Bold' }]}>{fmtGiorni(totOre)}</Text>
+                <Text style={[S.cellRight, S.rpValore, { fontFamily: 'Helvetica-Bold' }]}>{fmtEur(totVal)}</Text>
+              </View>
+            )}
+          </View>
+        )
+      })}
     </View>
   )
 }
@@ -573,6 +642,7 @@ export function ReportDocument({ committenti, from, to, includeSpese }: ReportDo
                   <Text style={S.clienteName}>{cliente.ragioneSociale}</Text>
                 </View>
                 <AttivitaTable attivita={cliente.attivita} />
+                <RiepilogoProgettiTipi attivita={cliente.attivita} />
                 <TotaliCliente attivita={cliente.attivita} />
               </View>
             ))}

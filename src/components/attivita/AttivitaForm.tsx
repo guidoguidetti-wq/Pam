@@ -69,7 +69,7 @@ type FormData = z.infer<typeof schema>
 interface Committente { id: number; ragioneSociale: string }
 interface TipoAttivita { id: number; codice: string; descrizione: string }
 interface Cliente { id: number; ragioneSociale: string; kmTrasferta: number | null }
-interface Progetto { id: number; nome: string }
+interface Progetto { id: number; nome: string; tipiAttivita: { tipoAttivitaId: number }[] }
 
 interface DefaultSlot {
   dataAttivita: string
@@ -141,6 +141,14 @@ export function AttivitaForm({
   const watchOraFine = watch('oraFine')
   const watchOreErogateTesto = watch('oreErogateTesto')
   const watchPrezzoUnitarioTesto = watch('prezzoUnitarioTesto')
+  const watchProgettoId = watch('progettoId')
+
+  // Tipi attività selezionabili: se è scelto un progetto, solo quelli previsti dal progetto
+  const progettoSel = watchProgettoId ? progetti.find((p) => String(p.id) === watchProgettoId) : undefined
+  const tipiProgetto = progettoSel && progettoSel.tipiAttivita.length > 0
+    ? new Set(progettoSel.tipiAttivita.map((t) => t.tipoAttivitaId))
+    : null
+  const tipiDisponibili = tipiProgetto ? tipiAttivita.filter((t) => tipiProgetto.has(t.id)) : tipiAttivita
 
   // km trasferta default dal cliente selezionato
   const kmDefaultTrasferta =
@@ -174,6 +182,16 @@ export function AttivitaForm({
       .then((data: Progetto[]) => setProgetti(data))
       .finally(() => setLoadingProgetti(false))
   }, [watchClienteId, watchCommittenteId])
+
+  // Al cambio progetto: se il tipo scelto non è previsto lo azzera; se il progetto ha un solo tipo lo seleziona
+  useEffect(() => {
+    if (!tipiProgetto) return
+    const current = watchTipoAttivitaId ? parseInt(watchTipoAttivitaId) : null
+    if (current !== null && tipiProgetto.has(current)) return
+    const unico = tipiProgetto.size === 1 ? String([...tipiProgetto][0]) : ''
+    setValue('tipoAttivitaId', unico, { shouldValidate: !!unico })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [watchProgettoId, progetti])
 
   // Auto-fetch prezzo: si avvia quando cambiano committente/cliente/tipo/data.
   // Usa AbortController per cancellare richieste precedenti (evita race condition).
@@ -422,7 +440,10 @@ export function AttivitaForm({
           {errors.dataAttivita && <p className="text-xs text-destructive">{errors.dataAttivita.message}</p>}
         </div>
         <div className="space-y-0.5">
-          <Label>Tipo attività</Label>
+          <Label>
+            Tipo attività
+            {tipiProgetto && <span className="text-muted-foreground text-xs font-normal"> (del progetto)</span>}
+          </Label>
           <Select
             value={watch('tipoAttivitaId') ?? ''}
             onValueChange={(v) => setValue('tipoAttivitaId', v, { shouldValidate: true })}
@@ -431,7 +452,7 @@ export function AttivitaForm({
               <SelectValue placeholder="Seleziona tipo..." />
             </SelectTrigger>
             <SelectContent>
-              {tipiAttivita.map((t) => (
+              {tipiDisponibili.map((t) => (
                 <SelectItem key={t.id} value={String(t.id)}>
                   {t.codice} — {t.descrizione}
                 </SelectItem>

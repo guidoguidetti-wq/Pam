@@ -63,8 +63,9 @@ export async function GET(req: NextRequest) {
     include: {
       committente: { select: { ragioneSociale: true } },
       cliente: { select: { ragioneSociale: true } },
-      stime: { select: { giorniStimati: true, orePerGiorno: true } },
-      attivita: { select: { oreErogate: true, oraInizio: true, oraFine: true } },
+      stime: { select: { giorniStimati: true, orePerGiorno: true, tipoAttivita: { select: { id: true, codice: true, descrizione: true } } } },
+      tipiAttivita: { select: { tipoAttivita: { select: { id: true, codice: true, descrizione: true } } }, orderBy: { tipoAttivitaId: 'asc' } },
+      attivita: { select: { oreErogate: true, oraInizio: true, oraFine: true, tipoAttivita: { select: { id: true, codice: true, descrizione: true } } } },
     },
   })
 
@@ -77,12 +78,37 @@ export async function GET(req: NextRequest) {
       ? p.stime.reduce((acc, s) => acc + parseFloat(s.giorniStimati.toString()), 0)
       : null
 
-    const oreErogate = p.attivita.reduce((acc, a) => {
-      const ore = a.oreErogate != null
+    // Dettaglio ore (in ore decimali) per tipo attività: tipi del progetto + tipi presenti nelle attività
+    type RigaTipo = { id: number; codice: string; descrizione: string; oreErogate: number; oreStimate: number | null }
+    const perTipoMap = new Map<number, RigaTipo>()
+    const riga = (t: { id: number; codice: string; descrizione: string }) => {
+      if (!perTipoMap.has(t.id))
+        perTipoMap.set(t.id, { ...t, oreErogate: 0, oreStimate: p.tipoBudget === 'STIMATO' ? 0 : null })
+      return perTipoMap.get(t.id)!
+    }
+    for (const pt of p.tipiAttivita) riga(pt.tipoAttivita)
+    if (p.tipoBudget === 'STIMATO') {
+      for (const s of p.stime) {
+        const r = riga(s.tipoAttivita)
+        r.oreStimate = (r.oreStimate ?? 0) + parseFloat(s.giorniStimati.toString()) * parseFloat(s.orePerGiorno.toString())
+      }
+    }
+
+    let oreErogate = 0
+    for (const a of p.attivita) {
+      const ore = (a.oreErogate != null
         ? a.oreErogate
-        : epochTimeToMins(a.oraFine) - epochTimeToMins(a.oraInizio)
-      return acc + ore
-    }, 0) / 60
+        : epochTimeToMins(a.oraFine) - epochTimeToMins(a.oraInizio)) / 60
+      oreErogate += ore
+      riga(a.tipoAttivita).oreErogate += ore
+    }
+    const perTipo = [...perTipoMap.values()]
+      .sort((a, b) => a.id - b.id)
+      .map((r) => ({
+        ...r,
+        oreErogate: Math.round(r.oreErogate * 100) / 100,
+        oreStimate: r.oreStimate !== null ? Math.round(r.oreStimate * 100) / 100 : null,
+      }))
 
     return {
       id: p.id,
@@ -97,6 +123,7 @@ export async function GET(req: NextRequest) {
       oreStimate: oreStimate !== null ? Math.round(oreStimate * 100) / 100 : null,
       giorniStimati: giorniStimati !== null ? Math.round(giorniStimati * 100) / 100 : null,
       oreErogate: Math.round(oreErogate * 100) / 100,
+      perTipo,
     }
   })
 

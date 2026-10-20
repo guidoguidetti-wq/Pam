@@ -1,70 +1,48 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { del } from '@vercel/blob'
-import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
-
-const stimaSchema = z.object({
-  tipoAttivitaId: z.number().int().positive(),
-  giorniStimati: z.coerce.number().positive(),
-  orePerGiorno: z.coerce.number().positive().default(8),
-})
-
-const schema = z.object({
-  committenteId: z.number().int().positive(),
-  clienteId: z.number().int().positive(),
-  codice: z.string().max(50).nullable().optional(),
-  nome: z.string().trim().min(1).max(200),
-  descrizione: z.string().nullable().optional(),
-  tipoBudget: z.enum(['STIMATO', 'CONSUNTIVO']).default('CONSUNTIVO'),
-  dataInizio: z.string().nullable().optional(),
-  dataFinePrevista: z.string().nullable().optional(),
-  attivo: z.boolean().default(true),
-  note: z.string().nullable().optional(),
-  stime: z.array(stimaSchema).default([]),
-})
+import { progettoSchema, progettoInclude, conOrePerTipo, datiProgetto } from '@/lib/progetti'
 
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth()
   if (!session) return NextResponse.json({ error: 'Non autorizzato' }, { status: 401 })
 
   const { id } = await params
+  const progettoId = parseInt(id)
   const body = await req.json()
-  const parsed = schema.safeParse(body)
+  const parsed = progettoSchema.safeParse(body)
   if (!parsed.success)
     return NextResponse.json({ error: 'Dati non validi', details: parsed.error.issues }, { status: 422 })
 
-  const { stime, dataInizio, dataFinePrevista, ...rest } = parsed.data
+  const data = datiProgetto(parsed.data)
 
   try {
+    // Non si può togliere un tipo che ha già attività registrate sul progetto
+    const tipiUsati = await prisma.attivita.findMany({
+      where: { progettoId },
+      distinct: ['tipoAttivitaId'],
+      select: { tipoAttivita: { select: { id: true, codice: true } } },
+    })
+    const tipiNuovi = new Set(data.tipiAttivita.create.map(t => t.tipoAttivitaId))
+    const mancanti = tipiUsati.filter(t => !tipiNuovi.has(t.tipoAttivita.id)).map(t => t.tipoAttivita.codice)
+    if (mancanti.length > 0)
+      return NextResponse.json(
+        { error: `Impossibile togliere tipi con attività già registrate: ${mancanti.join(', ')}` },
+        { status: 409 }
+      )
+
     const result = await prisma.$transaction(async (tx) => {
-      await tx.progettoStima.deleteMany({ where: { progettoId: parseInt(id) } })
+      await tx.progettoStima.deleteMany({ where: { progettoId } })
+      await tx.progettoTipoAttivita.deleteMany({ where: { progettoId } })
       return tx.progetto.update({
-        where: { id: parseInt(id) },
-        data: {
-          ...rest,
-          dataInizio: dataInizio ? new Date(dataInizio) : null,
-          dataFinePrevista: dataFinePrevista ? new Date(dataFinePrevista) : null,
-          stime: stime.length > 0 ? {
-            create: stime.map(s => ({
-              tipoAttivitaId: s.tipoAttivitaId,
-              giorniStimati: s.giorniStimati,
-              orePerGiorno: s.orePerGiorno,
-            })),
-          } : undefined,
-        },
-        include: {
-          committente: { select: { id: true, ragioneSociale: true } },
-          cliente: { select: { id: true, ragioneSociale: true } },
-          stime: {
-            include: { tipoAttivita: { select: { id: true, codice: true, descrizione: true } } },
-            orderBy: { tipoAttivitaId: 'asc' },
-          },
-          _count: { select: { attivita: true, allegati: true } },
-        },
+        where: { id: progettoId },
+        data,
+        include: progettoInclude,
       })
     })
-    return NextResponse.json(result)
+    const [arricchito] = await conOrePerTipo([result])
+    return NextResponse.json(arricchito)
   } catch (err) {
     console.error(err)
     return NextResponse.json({ error: 'Errore interno' }, { status: 500 })

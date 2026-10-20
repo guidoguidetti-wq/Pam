@@ -40,6 +40,7 @@ interface Progetto {
   oreStimate: number | null
   giorniStimati: number | null
   oreErogate: number
+  perTipo: { id: number; codice: string; descrizione: string; oreErogate: number; oreStimate: number | null }[]
 }
 
 interface TodoUrgente {
@@ -131,6 +132,33 @@ function ProgettoStimatoRow({ p }: { p: Progetto }) {
           {formatGg(p.oreErogate / oreGiorno)} / {formatGg(p.giorniStimati ?? oreStimate / oreGiorno)} gg
         </span>
       </div>
+      <OrePerTipo p={p} />
+    </div>
+  )
+}
+
+// Chip compatti con le ore per tipo attività (erogate / stimate)
+function OrePerTipo({ p }: { p: Progetto }) {
+  if (p.perTipo.length === 0) return null
+  return (
+    <div className="flex flex-wrap gap-1">
+      {p.perTipo.map((t) => {
+        const sforato = t.oreStimate != null && t.oreStimate > 0 && t.oreErogate > t.oreStimate
+        return (
+          <span
+            key={t.id}
+            title={t.descrizione}
+            className={cn(
+              'text-[10px] px-1.5 py-0.5 rounded tabular-nums',
+              sforato ? 'bg-red-50 text-red-700' : 'bg-muted text-muted-foreground'
+            )}
+          >
+            <span className="font-semibold">{t.codice}</span>{' '}
+            {formatOre(Math.round(t.oreErogate * 60))}
+            {t.oreStimate != null && t.oreStimate > 0 && <> / {formatOre(Math.round(t.oreStimate * 60))}</>}
+          </span>
+        )
+      })}
     </div>
   )
 }
@@ -446,6 +474,11 @@ export default function DashboardClient() {
                       {p.oreStimate != null && p.oreStimate > 0 && (
                         <div className="col-span-2">
                           <ProgressBar oreErogate={p.oreErogate} oreStimate={p.oreStimate} />
+                        </div>
+                      )}
+                      {p.perTipo.length > 0 && (
+                        <div className="col-span-2 mt-1">
+                          <OrePerTipo p={p} />
                         </div>
                       )}
                     </div>
