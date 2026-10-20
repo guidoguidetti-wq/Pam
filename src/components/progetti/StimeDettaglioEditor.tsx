@@ -9,7 +9,6 @@ import { toast } from 'sonner'
 import { ArrowLeft, Plus, Save, Trash2, Loader2, FileSpreadsheet, Pencil, Check } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Checkbox } from '@/components/ui/checkbox'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { cn } from '@/lib/utils'
 
@@ -24,12 +23,17 @@ type ProgettoInfo = {
   tipiProgetto: number[]
 }
 
+// Normalizza a stringa valori null/undefined/numerici (es. da reset o campi non montati)
+const testo = (max: number) =>
+  z.preprocess(v => (v == null ? '' : typeof v === 'number' ? String(v) : v), z.string().max(max))
+const flag = z.preprocess(v => v === true, z.boolean())
+
 const rigaSchema = z.object({
-  tipoAttivitaId: z.string(),
-  descrizione: z.string().max(5000).optional(),
-  giorni: z.string(),
-  inviata: z.boolean(),
-  accettata: z.boolean(),
+  tipoAttivitaId: testo(20),
+  descrizione: testo(5000),
+  giorni: testo(20),
+  inviata: flag,
+  accettata: flag,
 })
 
 function num(v: string | undefined) {
@@ -37,15 +41,16 @@ function num(v: string | undefined) {
   return isNaN(n) ? 0 : n
 }
 
-// Riga completamente vuota: viene ignorata al salvataggio
-function rigaVuota(r: z.infer<typeof rigaSchema>) {
-  return !r.tipoAttivitaId && !r.descrizione?.trim() && !r.giorni.trim()
+// Riga vuota (senza descrizione né giornate): viene ignorata al salvataggio,
+// anche se ha il tipo preimpostato dalla riga precedente
+function rigaVuota(r: { descrizione?: string | null; giorni?: string | number | null }) {
+  return !String(r.descrizione ?? '').trim() && !String(r.giorni ?? '').trim()
 }
 
 const formSchema = z
   .object({
     righe: z.array(rigaSchema),
-    stimeNote: z.string().max(10000).optional(),
+    stimeNote: testo(10000),
   })
   .superRefine((data, ctx) => {
     data.righe.forEach((r, i) => {
@@ -122,7 +127,7 @@ export default function StimeDettaglioEditor({
 
   async function chiudi(i: number) {
     const r = righe[i]
-    if (!rigaVuota(r)) {
+    if (r && !rigaVuota(r)) {
       const ok = await trigger([`righe.${i}.tipoAttivitaId`, `righe.${i}.giorni`])
       if (!ok || !r.tipoAttivitaId) {
         toast.error('Completa la riga prima di chiuderla (il tipo attività è obbligatorio)')
@@ -196,11 +201,31 @@ export default function StimeDettaglioEditor({
   const totale = totaliPerTipo.reduce((acc, t) => acc + t.giorni, 0)
   const totaleAccettato = (righe ?? []).filter(r => r.accettata).reduce((acc, r) => acc + num(r.giorni), 0)
 
-  // In caso di errori apre in modifica le righe da correggere
+  // In caso di errori: apre le righe da correggere, le scorre in vista e spiega cosa non va
   function onInvalid(errs: typeof errors) {
-    const ids = fields.filter((_, i) => errs.righe?.[i]).map(f => f.id)
-    setInModifica(prev => new Set([...prev, ...ids]))
-    toast.error('Controlla le righe evidenziate')
+    const righeErr = fields.flatMap((f, i) => (errs.righe?.[i] ? [{ id: f.id, i }] : []))
+    setInModifica(prev => new Set([...prev, ...righeErr.map(r => r.id)]))
+
+    const dettagli: string[] = righeErr.slice(0, 3).map(({ i }) => {
+      const e = errs.righe?.[i]
+      const msg = e?.tipoAttivitaId?.message ?? e?.giorni?.message ?? e?.descrizione?.message ?? 'dato non valido'
+      return `riga ${i + 1}: ${msg}`
+    })
+    if (righeErr.length > 3) dettagli.push(`e altre ${righeErr.length - 3}`)
+    if (errs.stimeNote?.message) dettagli.push(`note: ${errs.stimeNote.message}`)
+    if (errs.righe?.root?.message) dettagli.push(errs.righe.root.message)
+    if (!dettagli.length && errs.righe?.message) dettagli.push(errs.righe.message)
+
+    if (righeErr.length > 0)
+      setTimeout(() => document.getElementById(`riga-stima-${righeErr[0].i}`)?.scrollIntoView({ block: 'center' }), 0)
+    toast.error('Impossibile salvare', { description: dettagli.join(' · ') || 'Dati non validi' })
+  }
+
+  // Annulla tutte le modifiche non salvate e torna all'ultimo salvataggio
+  function annullaModifiche() {
+    if (!confirm('Annullare tutte le modifiche non salvate?')) return
+    dopoReset.current = true
+    reset()
   }
 
   async function onSubmit(data: FormData) {
@@ -245,21 +270,16 @@ export default function StimeDettaglioEditor({
     }
   }
 
-  // Seleziona/deseleziona il flag su tutte le righe compilate
-  function impostaTutte(campo: 'inviata' | 'accettata', valore: boolean) {
-    righe.forEach((r, i) => {
-      if (!rigaVuota(r)) setValue(`righe.${i}.${campo}`, valore, { shouldDirty: true })
-    })
-  }
-  const righeCompilate = (righe ?? []).filter(r => !rigaVuota(r))
-  const tutte = (campo: 'inviata' | 'accettata') =>
-    righeCompilate.length > 0 && righeCompilate.every(r => r[campo])
-
   return (
     <form onSubmit={handleSubmit(onSubmit, onInvalid)} onKeyDown={onKeyDown} className="space-y-2">
       {/* Barra superiore fissa: progetto + azioni */}
       <div className="sticky top-0 z-20 -mx-3 -mt-3 px-3 h-11 flex items-center gap-2 bg-background/95 backdrop-blur border-b">
-        <Link href="/progetti" title="Torna ai progetti" className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground">
+        <Link
+          href="/progetti"
+          title="Torna ai progetti"
+          onClick={e => { if (isDirty && !confirm('Ci sono modifiche non salvate. Uscire senza salvare?')) e.preventDefault() }}
+          className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground"
+        >
           <ArrowLeft className="h-4 w-4" />
         </Link>
         <div className="min-w-0 flex items-baseline gap-2 truncate">
@@ -290,6 +310,11 @@ export default function StimeDettaglioEditor({
             <FileSpreadsheet className="h-4 w-4 sm:mr-1.5" />
             <span className="hidden sm:inline">Export</span>
           </Button>
+          {isDirty && (
+            <Button type="button" size="sm" variant="ghost" className="h-8" onClick={annullaModifiche}>
+              Annulla modifiche
+            </Button>
+          )}
           <Button type="submit" size="sm" className="h-8" disabled={saving || !isDirty}>
             {saving ? <Loader2 className="h-4 w-4 sm:mr-1.5 animate-spin" /> : <Save className="h-4 w-4 sm:mr-1.5" />}
             <span className="hidden sm:inline">{saving ? 'Salvataggio…' : 'Salva'}</span>
@@ -307,35 +332,14 @@ export default function StimeDettaglioEditor({
 
       {/* Tabella righe */}
       <div className="border rounded-lg">
-        <table className="w-full text-sm">
-          <thead className="sticky top-11 z-10 bg-muted">
-            <tr className="text-xs">
-              <th className="text-left px-2 py-1 font-medium w-48">Tipo attività</th>
-              <th className="text-left px-2 py-1 font-medium">
-                Descrizione
-                <span
-                  className="ml-2 font-normal text-muted-foreground hidden lg:inline"
-                  title="Le righe lasciate vuote vengono ignorate"
-                >
-                  Invio = riga successiva · Shift+Invio = a capo · Esc = chiudi riga · Ctrl+Invio = salva · giornate vuote = nota
-                </span>
-              </th>
-              <th className="text-right px-2 py-1 font-medium w-24">Stima (gg)</th>
-              <th className="text-center px-1 py-1 font-medium w-14">
-                <label className="flex items-center justify-center gap-1 cursor-pointer" title="Inviata — seleziona tutte">
-                  <Checkbox checked={tutte('inviata')} onCheckedChange={v => impostaTutte('inviata', v === true)} />
-                  Inv.
-                </label>
-              </th>
-              <th className="text-center px-1 py-1 font-medium w-14">
-                <label className="flex items-center justify-center gap-1 cursor-pointer" title="Accettata — seleziona tutte">
-                  <Checkbox checked={tutte('accettata')} onCheckedChange={v => impostaTutte('accettata', v === true)} />
-                  Acc.
-                </label>
-              </th>
-              <th className="px-1 py-1 w-14"></th>
-            </tr>
-          </thead>
+        <table className="w-full text-xs table-fixed">
+          <colgroup>
+            <col className="w-44" />
+            <col />
+            <col className="w-20" />
+            <col className="w-[148px]" />
+            <col className="w-[52px]" />
+          </colgroup>
           <tbody className="divide-y">
             {fields.map((f, i) => {
               const err = errors.righe?.[i]
@@ -346,20 +350,22 @@ export default function StimeDettaglioEditor({
               return (
                 <tr
                   key={f.id}
+                  id={`riga-stima-${i}`}
                   className={cn(
-                    editing ? 'align-top bg-amber-50/40' : 'align-middle hover:bg-muted/30',
-                    !editing && r?.accettata && 'bg-emerald-50/50'
+                    editing ? 'align-top bg-amber-50/40' : 'align-middle leading-tight hover:bg-muted/30',
+                    !editing && r?.accettata && 'bg-emerald-50/50',
+                    err && 'bg-red-50 shadow-[inset_3px_0_0_0_rgb(220_38_38)]'
                   )}
                   onDoubleClick={() => { if (!editing) apri(i) }}
                 >
                   {editing ? (
                     <>
-                      <td className="px-2 py-1">
+                      <td className="px-1.5 py-px">
                         <Select
                           value={r?.tipoAttivitaId ?? ''}
                           onValueChange={v => setValue(`righe.${i}.tipoAttivitaId`, v, { shouldDirty: true, shouldValidate: true })}
                         >
-                          <SelectTrigger className={cn('h-7 text-xs', err?.tipoAttivitaId && 'border-destructive')}>
+                          <SelectTrigger className={cn('h-6 px-2 text-xs', err?.tipoAttivitaId && 'border-destructive')}>
                             <SelectValue placeholder="Seleziona tipo…" />
                           </SelectTrigger>
                           <SelectContent>
@@ -371,19 +377,19 @@ export default function StimeDettaglioEditor({
                           </SelectContent>
                         </Select>
                       </td>
-                      <td className="px-2 py-1">
+                      <td className="px-1.5 py-px">
                         <textarea
                           rows={1}
                           placeholder="Descrizione attività stimata"
-                          className="w-full min-h-7 px-2 py-1 border rounded-md text-xs bg-background resize-y focus:outline-none focus:ring-2 focus:ring-ring"
+                          className="block w-full h-6 min-h-6 px-2 py-0.5 leading-tight border rounded-md text-xs bg-background resize-y focus:outline-none focus:ring-2 focus:ring-ring"
                           {...register(`righe.${i}.descrizione`)}
                         />
                       </td>
-                      <td className="px-2 py-1">
+                      <td className="px-1.5 py-px">
                         <Input
                           inputMode="decimal"
                           placeholder="nota"
-                          className={cn('h-7 text-xs text-right tabular-nums', err?.giorni && 'border-destructive')}
+                          className={cn('h-6 px-2 text-xs text-right tabular-nums', err?.giorni && 'border-destructive')}
                           {...register(`righe.${i}.giorni`)}
                         />
                         {err?.giorni && <p className="text-[10px] text-destructive text-right">{err.giorni.message}</p>}
@@ -391,7 +397,7 @@ export default function StimeDettaglioEditor({
                     </>
                   ) : (
                     <>
-                      <td className="px-2 py-0.5 text-xs whitespace-nowrap">
+                      <td className="px-2 py-0 h-6 truncate">
                         {tipo ? (
                           <span title={tipo.descrizione}>
                             {tipiProgetto.has(tipo.id) ? '• ' : ''}
@@ -400,40 +406,54 @@ export default function StimeDettaglioEditor({
                           </span>
                         ) : <span className="text-muted-foreground">—</span>}
                       </td>
-                      <td className="px-2 py-0.5 text-xs max-w-0">
+                      <td className="px-2 py-0 h-6">
                         <div className={cn('truncate', nota && 'italic text-muted-foreground')} title={r?.descrizione || undefined}>
                           {r?.descrizione || <span className="text-muted-foreground">—</span>}
                         </div>
                       </td>
-                      <td className="px-2 py-0.5 text-xs text-right tabular-nums font-medium">
+                      <td className="px-2 py-0 h-6 text-right tabular-nums font-medium">
                         {nota ? <span className="text-[10px] font-normal italic text-muted-foreground">nota</span> : fmtGg(num(r?.giorni))}
                       </td>
                     </>
                   )}
-                  <td className="px-1 py-0.5">
-                    <div className="h-7 flex items-center justify-center">
-                      <Checkbox
-                        checked={r?.inviata ?? false}
-                        onCheckedChange={v => setValue(`righe.${i}.inviata`, v === true, { shouldDirty: true })}
-                      />
+                  <td className="px-1 py-px">
+                    <div className="h-6 flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => setValue(`righe.${i}.inviata`, !r?.inviata, { shouldDirty: true })}
+                        title={r?.inviata ? 'Inviata — clic per annullare' : 'Segna come inviata'}
+                        className={cn(
+                          'h-5 px-1.5 rounded-full border text-[10px] font-medium transition-colors',
+                          r?.inviata
+                            ? 'bg-blue-600 border-blue-600 text-white'
+                            : 'border-border text-muted-foreground hover:border-blue-400 hover:text-blue-700'
+                        )}
+                      >
+                        Inviata
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setValue(`righe.${i}.accettata`, !r?.accettata, { shouldDirty: true })}
+                        title={r?.accettata ? 'Accettata — clic per annullare' : 'Segna come accettata'}
+                        className={cn(
+                          'h-5 px-1.5 rounded-full border text-[10px] font-medium transition-colors',
+                          r?.accettata
+                            ? 'bg-emerald-600 border-emerald-600 text-white'
+                            : 'border-border text-muted-foreground hover:border-emerald-400 hover:text-emerald-700'
+                        )}
+                      >
+                        Accettata
+                      </button>
                     </div>
                   </td>
-                  <td className="px-1 py-0.5">
-                    <div className="h-7 flex items-center justify-center">
-                      <Checkbox
-                        checked={r?.accettata ?? false}
-                        onCheckedChange={v => setValue(`righe.${i}.accettata`, v === true, { shouldDirty: true })}
-                      />
-                    </div>
-                  </td>
-                  <td className="px-1 py-0.5">
-                    <div className="h-7 flex items-center justify-end">
+                  <td className="px-1 py-px">
+                    <div className="h-6 flex items-center justify-end">
                       {editing ? (
                         <button
                           type="button"
                           onClick={() => chiudi(i)}
                           title="Chiudi modifica riga (Esc)"
-                          className="h-6 w-6 flex items-center justify-center rounded hover:bg-accent text-muted-foreground hover:text-foreground"
+                          className="h-5 w-5 flex items-center justify-center rounded hover:bg-accent text-muted-foreground hover:text-foreground"
                         >
                           <Check className="h-3.5 w-3.5" />
                         </button>
@@ -442,7 +462,7 @@ export default function StimeDettaglioEditor({
                           type="button"
                           onClick={() => apri(i)}
                           title="Modifica riga (doppio clic)"
-                          className="h-6 w-6 flex items-center justify-center rounded hover:bg-accent text-muted-foreground hover:text-foreground"
+                          className="h-5 w-5 flex items-center justify-center rounded hover:bg-accent text-muted-foreground hover:text-foreground"
                         >
                           <Pencil className="h-3.5 w-3.5" />
                         </button>
@@ -451,7 +471,7 @@ export default function StimeDettaglioEditor({
                         type="button"
                         onClick={() => remove(i)}
                         title="Elimina riga"
-                        className="h-6 w-6 flex items-center justify-center rounded hover:bg-accent text-muted-foreground hover:text-destructive"
+                        className="h-5 w-5 flex items-center justify-center rounded hover:bg-accent text-muted-foreground hover:text-destructive"
                       >
                         <Trash2 className="h-3.5 w-3.5" />
                       </button>
@@ -464,19 +484,22 @@ export default function StimeDettaglioEditor({
           <tfoot className="border-t">
             <tr>
               <td colSpan={2} className="px-1 py-0.5">
-                <div className="flex gap-1">
-                  <Button type="button" size="sm" variant="ghost" className="h-7 text-xs" onClick={() => aggiungiRighe(1)}>
+                <div className="flex items-center gap-1">
+                  <Button type="button" size="sm" variant="ghost" className="h-6 px-2 text-xs" onClick={() => aggiungiRighe(1)}>
                     <Plus className="h-3.5 w-3.5 mr-1" />
                     Aggiungi riga
                   </Button>
-                  <Button type="button" size="sm" variant="ghost" className="h-7 text-xs" onClick={() => aggiungiRighe(5)}>
+                  <Button type="button" size="sm" variant="ghost" className="h-6 px-2 text-xs" onClick={() => aggiungiRighe(5)}>
                     <Plus className="h-3.5 w-3.5 mr-1" />
                     5 righe
                   </Button>
+                  <span className="ml-2 text-[10px] text-muted-foreground truncate hidden lg:inline">
+                    Invio = riga successiva · Shift+Invio = a capo · Esc = chiudi riga · doppio clic = modifica · Ctrl+Invio = salva · giornate vuote = nota
+                  </span>
                 </div>
               </td>
-              <td className="px-2 py-0.5 text-right text-xs font-semibold tabular-nums">{fmtGg(totale)} gg</td>
-              <td colSpan={3}></td>
+              <td className="px-2 py-0.5 text-right font-semibold tabular-nums">{fmtGg(totale)} gg</td>
+              <td colSpan={2}></td>
             </tr>
           </tfoot>
         </table>
