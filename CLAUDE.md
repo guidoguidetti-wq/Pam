@@ -232,10 +232,40 @@ TOTALE COMMITTENTE:                         €2.308,30
 
 ---
 
+## ⚠️ Sicurezza database — REGOLA ASSOLUTA
+
+`DATABASE_URL` / `DIRECT_URL` in `.env` e `.env.local` puntano al **database di PRODUZIONE**
+(Neon `pamdb`). Non esiste un database di sviluppo separato.
+
+> **Incidente 19/10/2026**: `prisma migrate diff --from-migrations ... --shadow-database-url <DATABASE_URL>`
+> ha **svuotato completamente il DB di produzione** (Prisma resetta lo shadow database).
+> Recuperato solo grazie a un backup SQL manuale. **Non deve ripetersi.**
+
+**VIETATO** eseguire contro il DB reale, senza eccezioni:
+- `--shadow-database-url` con l'URL del DB reale (in qualsiasi comando Prisma)
+- `prisma migrate dev`, `prisma migrate reset`, `prisma db push --force-reset`
+- `prisma migrate diff --from-migrations` / `--to-migrations` (richiedono uno shadow DB)
+- `DROP SCHEMA`, `DROP TABLE`, `TRUNCATE`, `DELETE` senza `WHERE`
+- `scripts/restore-pam.mjs` senza conferma esplicita dell'utente
+
+**Procedura per nuove migrazioni:**
+1. Modificare `prisma/schema.prisma` ed eseguire `npx prisma validate` / `npx prisma format`
+2. Scrivere l'SQL **a mano** in `prisma/migrations/<YYYYMMDDHHMMSS>_<nome>/migration.sql`
+   (solo modifiche additive quando possibile: `ADD COLUMN`, `CREATE INDEX`, …)
+3. Per confrontare schema e DB usare solo comandi in **sola lettura**:
+   `npx prisma migrate status` oppure
+   `npx prisma migrate diff --from-schema-datasource prisma/schema.prisma --to-schema-datamodel prisma/schema.prisma --script`
+4. **Chiedere conferma all'utente** e suggerire un backup prima di `npx prisma migrate deploy`
+   (eseguito anche automaticamente dal build su Vercel)
+
+In caso di dubbio su un comando che scrive sul DB: **fermarsi e chiedere**.
+
+---
+
 ## Comandi utili
 
 ```bash
-# Setup iniziale
+# Setup iniziale (SOLO su database nuovo e vuoto — mai sul DB di produzione)
 npm install
 npx prisma generate
 npx prisma migrate dev --name init

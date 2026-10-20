@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { signOut } from 'next-auth/react'
-import { CalendarDays, Building2, Users, Tag, FolderOpen, FileText, LogOut, ListChecks, LayoutDashboard, Receipt, CheckSquare, Landmark } from 'lucide-react'
+import { CalendarDays, Building2, Users, Tag, FolderOpen, FileText, LogOut, ListChecks, LayoutDashboard, Receipt, CheckSquare, Landmark, KeyRound } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import SidebarBackup from '@/components/layout/SidebarBackup'
 
@@ -19,6 +19,7 @@ const nav = [
   { href: '/fatture-pagamenti', label: 'Fatture e Pagamenti', icon: Receipt },
   { href: '/todo', label: 'Task & Memo', icon: CheckSquare },
   { href: '/conti-banca', label: 'Conti Banca', icon: Landmark },
+  { href: '/password-manager', label: 'Password Manager', icon: KeyRound },
 ]
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {

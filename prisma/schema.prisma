@@ -99,11 +99,12 @@ model Cliente {
   attivo         Boolean  @default(true)
   createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
 
-  committente Committente @relation(fields: [committenteId], references: [id])
+  committente Committente   @relation(fields: [committenteId], references: [id])
   listino     Listino[]
   progetti    Progetto[]
   attivita    Attivita[]
   todo        Todo[]
+  credenziali Credenziale[]
 
   @@index([committenteId])
   @@map("cliente")
@@ -356,4 +357,36 @@ model Todo {
   @@index([stato, priorita])
   @@index([committenteId])
   @@map("todo")
+}
+
+// ─── PASSWORD MANAGER ──────────────────────────────────────
+
+model Credenziale {
+  id        Int      @id @default(autoincrement())
+  clienteId Int      @map("cliente_id")
+  sezione   String   @db.VarChar(200)
+  ambiente  String?  @db.VarChar(100)
+  note      String?  @db.Text
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  cliente Cliente           @relation(fields: [clienteId], references: [id])
+  voci    CredenzialeVoce[]
+
+  @@index([clienteId])
+  @@map("credenziale")
+}
+
+model CredenzialeVoce {
+  id            Int      @id @default(autoincrement())
+  credenzialeId Int      @map("credenziale_id")
+  descrizione   String?  @db.VarChar(500)
+  utente        String?  @db.VarChar(500)
+  password      String?  @db.VarChar(1000)
+  ordine        Int      @default(0)
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  credenziale Credenziale @relation(fields: [credenzialeId], references: [id], onDelete: Cascade)
+
+  @@index([credenzialeId])
+  @@map("credenziale_voce")
 }
