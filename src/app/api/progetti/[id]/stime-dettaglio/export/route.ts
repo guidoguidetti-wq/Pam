@@ -48,8 +48,6 @@ export async function GET(_req: NextRequest, { params }: Params) {
       select: {
         nome: true,
         codice: true,
-        stimeInviate: true,
-        stimeAccettate: true,
         stimeNote: true,
         committente: { select: { ragioneSociale: true } },
         cliente: { select: { ragioneSociale: true } },
@@ -58,6 +56,8 @@ export async function GET(_req: NextRequest, { params }: Params) {
           select: {
             descrizione: true,
             giorni: true,
+            inviata: true,
+            accettata: true,
             tipoAttivita: { select: { id: true, codice: true, descrizione: true } },
           },
         },
@@ -75,13 +75,15 @@ export async function GET(_req: NextRequest, { params }: Params) {
     ws.columns = [
       { key: 'codice', width: 10 },
       { key: 'tipo', width: 26 },
-      { key: 'descrizione', width: 70 },
-      { key: 'giorni', width: 14 },
+      { key: 'descrizione', width: 60 },
+      { key: 'giorni', width: 12 },
+      { key: 'inviata', width: 10 },
+      { key: 'accettata', width: 11 },
     ]
 
     // Intestazione documento
     const titolo = ws.addRow([`Stima — ${progetto.codice ? `[${progetto.codice}] ` : ''}${progetto.nome}`])
-    ws.mergeCells(titolo.number, 1, titolo.number, 4)
+    ws.mergeCells(titolo.number, 1, titolo.number, 6)
     titolo.font = { bold: true, size: 14, color: { argb: PRIMARY } }
     titolo.height = 22
 
@@ -89,17 +91,15 @@ export async function GET(_req: NextRequest, { params }: Params) {
       ['Committente', progetto.committente.ragioneSociale],
       ['Cliente', progetto.cliente.ragioneSociale],
       ['Data', new Date().toLocaleDateString('it-IT')],
-      ['Inviate', progetto.stimeInviate ? 'Sì' : 'No'],
-      ['Accettate', progetto.stimeAccettate ? 'Sì' : 'No'],
     ]
     for (const [k, v] of info) {
       const r = ws.addRow([k, v])
-      ws.mergeCells(r.number, 2, r.number, 4)
+      ws.mergeCells(r.number, 2, r.number, 6)
       r.getCell(1).font = { bold: true, color: { argb: 'FF6B7280' } }
     }
     if (progetto.stimeNote) {
       const r = ws.addRow(['Note', progetto.stimeNote])
-      ws.mergeCells(r.number, 2, r.number, 4)
+      ws.mergeCells(r.number, 2, r.number, 6)
       r.getCell(1).font = { bold: true, color: { argb: 'FF6B7280' } }
       r.getCell(1).alignment = { vertical: 'top' }
       r.getCell(2).alignment = { wrapText: true, vertical: 'top' }
@@ -108,11 +108,20 @@ export async function GET(_req: NextRequest, { params }: Params) {
     ws.addRow([])
 
     // Tabella dettaglio
-    stileIntestazione(ws.addRow(['Codice', 'Tipo attività', 'Descrizione', 'Giornate']))
+    stileIntestazione(ws.addRow(['Codice', 'Tipo attività', 'Descrizione', 'Giornate', 'Inviata', 'Accettata']))
     ws.getRow(ws.rowCount).getCell(4).alignment = { horizontal: 'right', vertical: 'middle' }
+    ws.getRow(ws.rowCount).getCell(5).alignment = { horizontal: 'center', vertical: 'middle' }
+    ws.getRow(ws.rowCount).getCell(6).alignment = { horizontal: 'center', vertical: 'middle' }
     const primaRiga = ws.rowCount + 1
     for (const [i, r] of progetto.stimeDettaglio.entries()) {
-      const row = ws.addRow([r.tipoAttivita.codice, r.tipoAttivita.descrizione, r.descrizione ?? '', r.giorni.toNumber()])
+      const row = ws.addRow([
+        r.tipoAttivita.codice,
+        r.tipoAttivita.descrizione,
+        r.descrizione ?? '',
+        r.giorni.toNumber() === 0 ? null : r.giorni.toNumber(),
+        r.inviata ? 'Sì' : 'No',
+        r.accettata ? 'Sì' : 'No',
+      ])
       row.eachCell({ includeEmpty: true }, cell => {
         cell.border = bordo
         cell.alignment = { vertical: 'top', wrapText: true }
@@ -120,10 +129,16 @@ export async function GET(_req: NextRequest, { params }: Params) {
       })
       row.getCell(4).numFmt = '#,##0.00'
       row.getCell(4).alignment = { vertical: 'top', horizontal: 'right' }
+      // Riga di nota (giornate 0)
+      if (r.giorni.toNumber() === 0) row.getCell(3).font = { italic: true, color: { argb: 'FF6B7280' } }
+      for (const [col, ok] of [[5, r.inviata], [6, r.accettata]] as const) {
+        row.getCell(col).alignment = { vertical: 'top', horizontal: 'center' }
+        row.getCell(col).font = { bold: ok, color: { argb: ok ? 'FF15803D' : 'FF9CA3AF' } }
+      }
     }
     const ultimaRiga = ws.rowCount
     const totale = ws.addRow(['', '', 'Totale',
-      progetto.stimeDettaglio.length > 0 ? { formula: `SUM(D${primaRiga}:D${ultimaRiga})` } : 0])
+      progetto.stimeDettaglio.length > 0 ? { formula: `SUM(D${primaRiga}:D${ultimaRiga})` } : 0, '', ''])
     stileTotale(totale)
     totale.getCell(3).alignment = { horizontal: 'right' }
     totale.getCell(4).numFmt = '#,##0.00'

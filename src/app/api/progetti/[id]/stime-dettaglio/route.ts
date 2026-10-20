@@ -12,25 +12,27 @@ const rigaSchema = z.object({
     z.string().trim().max(5000).nullable().optional()
   ),
   giorni: z.coerce.number().min(0, 'Le giornate non possono essere negative').max(99999),
+  inviata: z.boolean().default(false),
+  accettata: z.boolean().default(false),
 })
 
 const schema = z.object({
   righe: z.array(rigaSchema),
-  stimeInviate: z.boolean(),
-  stimeAccettate: z.boolean(),
   stimeNote: z.preprocess(
     (v) => (typeof v === 'string' && v.trim() === '' ? null : v),
     z.string().max(10000).nullable().optional()
   ),
 })
 
-const selectStato = { stimeInviate: true, stimeAccettate: true, stimeNote: true } as const
+const selectStato = { stimeNote: true } as const
 
 const select = {
   id: true,
   tipoAttivitaId: true,
   descrizione: true,
   giorni: true,
+  inviata: true,
+  accettata: true,
   ordine: true,
 } as const
 
@@ -52,7 +54,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
   }
 }
 
-// Salva l'intero elenco (sostituisce le righe esistenti) e lo stato inviate/accettate/note
+// Salva l'intero elenco (sostituisce le righe esistenti) e le note delle stime
 export async function PUT(req: NextRequest, { params }: Params) {
   const session = await auth()
   if (!session) return NextResponse.json({ error: 'Non autorizzato' }, { status: 401 })
@@ -72,7 +74,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
     const result = await prisma.$transaction(async (tx) => {
       const statoSalvato = await tx.progetto.update({
         where: { id: progettoId },
-        data: { ...stato, stimeNote: stato.stimeNote ?? null },
+        data: { stimeNote: stato.stimeNote ?? null },
         select: selectStato,
       })
       await tx.progettoStimaDettaglio.deleteMany({ where: { progettoId } })
@@ -82,6 +84,8 @@ export async function PUT(req: NextRequest, { params }: Params) {
           tipoAttivitaId: r.tipoAttivitaId,
           descrizione: r.descrizione ?? null,
           giorni: r.giorni,
+          inviata: r.inviata,
+          accettata: r.accettata,
           ordine: i,
         })),
       })

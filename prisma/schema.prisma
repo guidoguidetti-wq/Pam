@@ -151,8 +151,6 @@ model Progetto {
   attivo           Boolean    @default(true)
   note             String?    @db.Text
   // Stato del dettaglio stime (pagina /progetti/[id]/stime)
-  stimeInviate     Boolean    @default(false) @map("stime_inviate")
-  stimeAccettate   Boolean    @default(false) @map("stime_accettate")
   stimeNote        String?    @map("stime_note") @db.Text
   createdAt        DateTime   @default(now()) @map("created_at") @db.Timestamptz
 
@@ -190,6 +188,8 @@ model ProgettoStimaDettaglio {
   tipoAttivitaId Int      @map("tipo_attivita_id") @db.SmallInt
   descrizione    String?  @db.Text
   giorni         Decimal  @db.Decimal(8, 2)
+  inviata        Boolean  @default(false)
+  accettata      Boolean  @default(false)
   ordine         Int      @default(0)
   createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
 

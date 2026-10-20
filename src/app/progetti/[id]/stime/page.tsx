@@ -27,8 +27,6 @@ export default async function StimeDettaglioPage({ params }: { params: Promise<{
         committente: { select: { ragioneSociale: true } },
         cliente: { select: { ragioneSociale: true } },
         tipiAttivita: { select: { tipoAttivitaId: true } },
-        stimeInviate: true,
-        stimeAccettate: true,
         stimeNote: true,
       },
     }),
@@ -41,7 +39,7 @@ export default async function StimeDettaglioPage({ params }: { params: Promise<{
     prisma.progettoStimaDettaglio.findMany({
       where: { progettoId },
       orderBy: [{ ordine: 'asc' }, { id: 'asc' }],
-      select: { id: true, tipoAttivitaId: true, descrizione: true, giorni: true },
+      select: { id: true, tipoAttivitaId: true, descrizione: true, giorni: true, inviata: true, accettata: true },
     }),
   ])
   if (!progetto) notFound()
@@ -59,15 +57,13 @@ export default async function StimeDettaglioPage({ params }: { params: Promise<{
             tipiProgetto: progetto.tipiAttivita.map(t => t.tipoAttivitaId),
           }}
           tipiAttivita={tipiAttivita}
-          statoIniziale={{
-            stimeInviate: progetto.stimeInviate,
-            stimeAccettate: progetto.stimeAccettate,
-            stimeNote: progetto.stimeNote ?? '',
-          }}
+          noteIniziali={progetto.stimeNote ?? ''}
           righeIniziali={righe.map(r => ({
             tipoAttivitaId: String(r.tipoAttivitaId),
             descrizione: r.descrizione ?? '',
             giorni: String(r.giorni.toNumber()),
+            inviata: r.inviata,
+            accettata: r.accettata,
           }))}
         />
       </div>
