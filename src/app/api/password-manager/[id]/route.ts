@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { credenzialeSchema, credenzialeInclude } from '@/lib/credenziali'
+import { credenzialeSchema, credenzialeInclude, eliminaFileVoci } from '@/lib/credenziali'
 
 type Params = { params: Promise<{ id: string }> }
 
@@ -18,16 +18,18 @@ export async function PUT(req: NextRequest, { params }: Params) {
 
   const { voci, ...rest } = parsed.data
 
+  const fileRimossi: (string | null)[] = []
   try {
     const result = await prisma.$transaction(async (tx) => {
       const esistenti = await tx.credenzialeVoce.findMany({
         where: { credenzialeId },
-        select: { id: true },
+        select: { id: true, fileUrl: true },
       })
       const idEsistenti = new Set(esistenti.map(v => v.id))
       const idMantenuti = voci.flatMap(v => (v.id && idEsistenti.has(v.id) ? [v.id] : []))
 
-      // Voci rimosse dal form
+      // Voci rimosse dal form (i loro file vengono eliminati dopo il commit)
+      fileRimossi.push(...esistenti.filter(v => !idMantenuti.includes(v.id)).map(v => v.fileUrl))
       await tx.credenzialeVoce.deleteMany({
         where: { credenzialeId, id: { notIn: idMantenuti } },
       })
@@ -47,6 +49,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
         include: credenzialeInclude,
       })
     })
+    await eliminaFileVoci(fileRimossi)
     return NextResponse.json(result)
   } catch (err) {
     console.error(err)
@@ -60,7 +63,9 @@ export async function DELETE(_req: NextRequest, { params }: Params) {
 
   const { id } = await params
   try {
+    const voci = await prisma.credenzialeVoce.findMany({ where: { credenzialeId: parseInt(id) }, select: { fileUrl: true } })
     await prisma.credenziale.delete({ where: { id: parseInt(id) } })
+    await eliminaFileVoci(voci.map(v => v.fileUrl))
     return new NextResponse(null, { status: 204 })
   } catch (err) {
     console.error(err)

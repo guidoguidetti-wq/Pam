@@ -422,6 +422,11 @@ model CredenzialeVoce {
   descrizione   String?  @db.VarChar(500)
   utente        String?  @db.VarChar(500)
   password      String?  @db.VarChar(1000)
+  // Allegato facoltativo della riga (file chiavi, certificati…) su Vercel Blob
+  fileNome      String?  @map("file_nome") @db.VarChar(500)
+  fileUrl       String?  @map("file_url") @db.Text
+  fileKey       String?  @map("file_key") @db.Text
+  fileSize      Int?     @map("file_size")
   ordine        Int      @default(0)
   createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz
 

@@ -1,11 +1,11 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useFieldArray, useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { toast } from 'sonner'
-import { Plus, Pencil, Trash2, Copy, KeyRound, Search, X } from 'lucide-react'
+import { Plus, Pencil, Trash2, Copy, KeyRound, Search, X, Paperclip, Download } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
@@ -20,6 +20,9 @@ type Voce = {
   descrizione: string | null
   utente: string | null
   password: string | null
+  fileNome: string | null
+  fileUrl: string | null
+  fileSize: number | null
 }
 
 type Credenziale = {
@@ -37,6 +40,9 @@ const voceFormSchema = z.object({
   descrizione: z.string().max(500).optional(),
   utente: z.string().max(500).optional(),
   password: z.string().max(1000).optional(),
+  // Solo visualizzazione: l'allegato si carica a parte dopo il salvataggio
+  fileNome: z.string().nullable().optional(),
+  fileUrl: z.string().nullable().optional(),
 })
 
 const formSchema = z.object({
@@ -50,7 +56,33 @@ const formSchema = z.object({
 type FormData = z.infer<typeof formSchema>
 
 const AMBIENTI_BASE = ['Produzione', 'Test', 'Sviluppo', 'Collaudo']
-const vuota = { descrizione: '', utente: '', password: '' }
+const vuota = { descrizione: '', utente: '', password: '', fileNome: null, fileUrl: null }
+const CAMPI = ['descrizione', 'utente', 'password'] as const
+const MAX_FILE = 4 * 1024 * 1024
+
+// Link di download del file su Vercel Blob
+const urlDownload = (url: string) => `${url}${url.includes('?') ? '&' : '?'}download=1`
+
+function valoriForm(c: Credenziale): FormData {
+  return {
+    clienteId: c.clienteId,
+    sezione: c.sezione,
+    ambiente: c.ambiente ?? '',
+    note: c.note ?? '',
+    voci: [
+      ...c.voci.map(v => ({
+        id: v.id,
+        descrizione: v.descrizione ?? '',
+        utente: v.utente ?? '',
+        password: v.password ?? '',
+        fileNome: v.fileNome,
+        fileUrl: v.fileUrl,
+      })),
+      // Riga vuota pronta per l'inserimento successivo
+      vuota,
+    ],
+  }
+}
 
 async function copia(testo: string, cosa: string) {
   try {
@@ -80,13 +112,24 @@ export default function PasswordManagerView({ clienti }: { clienti: Cliente[] })
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editing, setEditing] = useState<Credenziale | null>(null)
   const [saving, setSaving] = useState(false)
+  // Allegati scelti nel form (per id riga del field array), caricati al salvataggio
+  const [fileInAttesa, setFileInAttesa] = useState<Record<string, File>>({})
+  const [fileDaRimuovere, setFileDaRimuovere] = useState<Set<string>>(new Set())
+  const inputFile = useRef<Record<string, HTMLInputElement | null>>({})
 
-  const { register, control, handleSubmit, watch, setValue, reset, formState: { errors } } = useForm<FormData>({
+  const { register, control, handleSubmit, watch, setValue, setFocus, reset, formState: { errors, isDirty } } = useForm<FormData>({
     resolver: zodResolver(formSchema),
     defaultValues: { sezione: '', ambiente: '', note: '', voci: [vuota] },
   })
   const { fields, append, remove } = useFieldArray({ control, name: 'voci' })
   const watchCliente = watch('clienteId')
+  const vociForm = watch('voci')
+  const modificheFile = Object.keys(fileInAttesa).length > 0 || fileDaRimuovere.size > 0
+
+  function azzeraFile() {
+    setFileInAttesa({})
+    setFileDaRimuovere(new Set())
+  }
 
   useEffect(() => {
     const url = filtroCliente !== 'all' ? `/api/password-manager?cliente_id=${filtroCliente}` : '/api/password-manager'
@@ -104,7 +147,7 @@ export default function PasswordManagerView({ clienti }: { clienti: Cliente[] })
     const q = cerca.trim().toLowerCase()
     if (!q) return credenziali
     return credenziali.filter(c =>
-      [c.sezione, c.ambiente, c.note, c.cliente.ragioneSociale, ...c.voci.flatMap(v => [v.descrizione, v.utente])]
+      [c.sezione, c.ambiente, c.note, c.cliente.ragioneSociale, ...c.voci.flatMap(v => [v.descrizione, v.utente, v.fileNome])]
         .some(t => t?.toLowerCase().includes(q))
     )
   }, [credenziali, cerca])
@@ -127,45 +170,74 @@ export default function PasswordManagerView({ clienti }: { clienti: Cliente[] })
       note: '',
       voci: [vuota],
     })
+    azzeraFile()
     setEditing(null)
     setDialogOpen(true)
   }
 
   function openEdit(c: Credenziale) {
-    reset({
-      clienteId: c.clienteId,
-      sezione: c.sezione,
-      ambiente: c.ambiente ?? '',
-      note: c.note ?? '',
-      voci: c.voci.length > 0
-        ? c.voci.map(v => ({
-            id: v.id,
-            descrizione: v.descrizione ?? '',
-            utente: v.utente ?? '',
-            password: v.password ?? '',
-          }))
-        : [vuota],
-    })
+    reset(valoriForm(c))
+    azzeraFile()
     setEditing(c)
     setDialogOpen(true)
   }
 
-  async function onSubmit(data: FormData) {
+  // Chiusura del dialog: chiede conferma se ci sono modifiche non salvate
+  function chiudiDialog() {
+    if ((isDirty || modificheFile) && !confirm('Ci sono modifiche non salvate. Chiudere senza salvare?')) return
+    setDialogOpen(false)
+  }
+
+  // Invio: passa al campo successivo; sull'ultimo campo dell'ultima riga aggiunge una nuova riga
+  function onKeyDownVoce(e: React.KeyboardEvent<HTMLInputElement>, i: number, campo: (typeof CAMPI)[number]) {
+    if (e.key !== 'Enter' || e.nativeEvent.isComposing) return
+    e.preventDefault()
+    const k = CAMPI.indexOf(campo)
+    if (k < CAMPI.length - 1) setFocus(`voci.${i}.${CAMPI[k + 1]}`)
+    else if (i < fields.length - 1) setFocus(`voci.${i + 1}.descrizione`)
+    else append(vuota, { focusName: `voci.${fields.length}.descrizione` })
+  }
+
+  function scegliFile(fid: string, file: File | undefined) {
+    if (!file) return
+    if (file.size > MAX_FILE) {
+      toast.error('File troppo grande (max 4 MB)')
+      return
+    }
+    setFileInAttesa(prev => ({ ...prev, [fid]: file }))
+  }
+
+  function annullaFileInAttesa(fid: string) {
+    setFileInAttesa(prev => {
+      const resto = { ...prev }
+      delete resto[fid]
+      return resto
+    })
+  }
+
+  function rimuoviRiga(i: number, fid: string) {
+    annullaFileInAttesa(fid)
+    remove(i)
+  }
+
+  async function onSubmit(data: FormData, chiudi: boolean) {
     setSaving(true)
     try {
+      // Righe da salvare, con l'id del field array per ritrovare gli allegati scelti
+      const righe = data.voci
+        .map((v, i) => ({ v, fid: fields[i]?.id ?? '' }))
+        .filter(({ v, fid }) => v.id || v.descrizione || v.utente || v.password || fileInAttesa[fid])
       const payload = {
         clienteId: data.clienteId,
         sezione: data.sezione,
         ambiente: data.ambiente || null,
         note: data.note || null,
-        voci: data.voci
-          .filter(v => v.id || v.descrizione || v.utente || v.password)
-          .map(v => ({
-            id: v.id,
-            descrizione: v.descrizione || null,
-            utente: v.utente || null,
-            password: v.password || null,
-          })),
+        voci: righe.map(({ v }) => ({
+          id: v.id,
+          descrizione: v.descrizione || null,
+          utente: v.utente || null,
+          password: v.password || null,
+        })),
       }
 
       const url = editing ? `/api/password-manager/${editing.id}` : '/api/password-manager'
@@ -179,14 +251,49 @@ export default function PasswordManagerView({ clienti }: { clienti: Cliente[] })
         return
       }
       const saved: Credenziale = await res.json()
+
+      // Allegati: le voci salvate sono nello stesso ordine delle righe inviate
+      const vociSalvate = [...saved.voci]
+      let erroriFile = 0
+      for (const [j, { v, fid }] of righe.entries()) {
+        const voce = vociSalvate[j]
+        if (!voce) continue
+        const file = fileInAttesa[fid]
+        let r: Response | null = null
+        if (file) {
+          const fd = new FormData()
+          fd.append('file', file)
+          r = await fetch(`/api/password-manager/voci/${voce.id}/allegato`, { method: 'POST', body: fd })
+        } else if (v.id && fileDaRimuovere.has(fid) && voce.fileUrl) {
+          r = await fetch(`/api/password-manager/voci/${voce.id}/allegato`, { method: 'DELETE' })
+        }
+        if (!r) continue
+        if (r.ok) vociSalvate[j] = await r.json()
+        else {
+          erroriFile++
+          const msg = (await r.json().catch(() => ({}))).error ?? 'errore'
+          toast.error(`Allegato "${file?.name ?? voce.fileNome}": ${msg}`)
+        }
+      }
+      const finale: Credenziale = { ...saved, voci: vociSalvate }
+
       // Se il filtro cliente è attivo e il cliente è cambiato, la credenziale esce dall'elenco
-      const visibile = filtroCliente === 'all' || saved.clienteId === parseInt(filtroCliente)
+      const visibile = filtroCliente === 'all' || finale.clienteId === parseInt(filtroCliente)
       setCredenziali(prev => {
-        const altre = prev.filter(c => c.id !== saved.id)
-        return visibile ? [...altre, saved] : altre
+        const altre = prev.filter(c => c.id !== finale.id)
+        return visibile ? [...altre, finale] : altre
       })
       toast.success(editing ? 'Credenziali aggiornate' : 'Credenziali create')
-      setDialogOpen(false)
+
+      if (chiudi && erroriFile === 0) {
+        setDialogOpen(false)
+        return
+      }
+      // Resta aperto in modifica, con una riga vuota per l'inserimento successivo
+      setEditing(finale)
+      reset(valoriForm(finale))
+      azzeraFile()
+      setTimeout(() => setFocus(`voci.${finale.voci.length}.descrizione`), 0)
     } finally {
       setSaving(false)
     }
@@ -276,6 +383,7 @@ export default function PasswordManagerView({ clienti }: { clienti: Cliente[] })
                           <th className="text-left font-medium px-3 py-1">Descrizione</th>
                           <th className="text-left font-medium px-3 py-1">Utente</th>
                           <th className="text-left font-medium px-3 py-1">Password</th>
+                          {c.voci.some(v => v.fileUrl) && <th className="text-left font-medium px-3 py-1">File</th>}
                         </tr>
                       </thead>
                       <tbody className="divide-y">
@@ -284,6 +392,20 @@ export default function PasswordManagerView({ clienti }: { clienti: Cliente[] })
                             <td className="px-3 py-1.5 text-xs">{v.descrizione || <span className="text-muted-foreground">—</span>}</td>
                             <td className="px-3 py-1.5"><CampoCopiabile valore={v.utente} cosa="Utente" /></td>
                             <td className="px-3 py-1.5"><CampoCopiabile valore={v.password} cosa="Password" /></td>
+                            {c.voci.some(x => x.fileUrl) && (
+                              <td className="px-3 py-1.5 max-w-[10rem]">
+                                {v.fileUrl ? (
+                                  <a
+                                    href={urlDownload(v.fileUrl)}
+                                    title={`Scarica ${v.fileNome ?? 'file'}`}
+                                    className="flex items-center gap-1 text-xs text-primary hover:underline"
+                                  >
+                                    <Download className="h-3.5 w-3.5 shrink-0" />
+                                    <span className="truncate">{v.fileNome ?? 'file'}</span>
+                                  </a>
+                                ) : null}
+                              </td>
+                            )}
                           </tr>
                         ))}
                       </tbody>
@@ -297,13 +419,13 @@ export default function PasswordManagerView({ clienti }: { clienti: Cliente[] })
       )}
 
       {/* Dialog form */}
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <Dialog open={dialogOpen} onOpenChange={open => (open ? setDialogOpen(true) : chiudiDialog())}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{editing ? 'Modifica credenziali' : 'Nuove credenziali'}</DialogTitle>
           </DialogHeader>
 
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-2 py-1" autoComplete="off">
+          <form onSubmit={handleSubmit(d => onSubmit(d, false))} className="space-y-2 py-1" autoComplete="off">
             <div className="space-y-1">
               <Label>Cliente *</Label>
               <Select value={watchCliente ? String(watchCliente) : ''} onValueChange={v => setValue('clienteId', parseInt(v))}>
@@ -358,33 +480,87 @@ export default function PasswordManagerView({ clienti }: { clienti: Cliente[] })
             <div className="space-y-2 border rounded-md p-3 bg-muted/20">
               <div className="flex items-center justify-between">
                 <span className="text-sm font-medium">Credenziali</span>
-                <Button type="button" size="sm" variant="outline" onClick={() => append(vuota)}>
+                <Button type="button" size="sm" variant="outline" onClick={() => append(vuota, { focusName: `voci.${fields.length}.descrizione` })}>
                   <Plus className="h-3.5 w-3.5 mr-1" />
                   Aggiungi riga
                 </Button>
               </div>
-              <div className="hidden sm:grid grid-cols-[1fr_1fr_1fr_auto] gap-2 text-xs text-muted-foreground">
-                <span>Descrizione</span><span>Utente</span><span>Password</span><span className="w-7" />
+              <div className="hidden sm:grid grid-cols-[1fr_1fr_1fr_11rem_auto] gap-2 text-xs text-muted-foreground">
+                <span>Descrizione</span><span>Utente</span><span>Password</span><span>Allegato</span><span className="w-7" />
               </div>
-              {fields.map((f, i) => (
-                <div key={f.id} className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_1fr_auto] gap-2 items-start border-b sm:border-0 pb-2 sm:pb-0">
-                  <Input className="h-8 text-sm" placeholder="Descrizione" {...register(`voci.${i}.descrizione`)} />
-                  <Input className="h-8 text-sm" placeholder="Utente" autoComplete="off" {...register(`voci.${i}.utente`)} />
-                  <Input className="h-8 text-sm font-mono" placeholder="Password" autoComplete="off" {...register(`voci.${i}.password`)} />
-                  <button
-                    type="button"
-                    onClick={() => remove(i)}
-                    title="Elimina riga"
-                    className="h-8 w-7 flex items-center justify-center rounded hover:bg-accent text-muted-foreground hover:text-destructive"
-                  >
-                    <X className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-              ))}
+              {fields.map((f, i) => {
+                const attesa = fileInAttesa[f.id]
+                const v = vociForm?.[i]
+                const esistente = v?.fileUrl && !fileDaRimuovere.has(f.id) ? v : null
+                return (
+                  <div key={f.id} className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_1fr_11rem_auto] gap-2 items-center border-b sm:border-0 pb-2 sm:pb-0">
+                    <Input className="h-8 text-sm" placeholder="Descrizione" {...register(`voci.${i}.descrizione`)} onKeyDown={e => onKeyDownVoce(e, i, 'descrizione')} />
+                    <Input className="h-8 text-sm" placeholder="Utente" autoComplete="off" {...register(`voci.${i}.utente`)} onKeyDown={e => onKeyDownVoce(e, i, 'utente')} />
+                    <Input className="h-8 text-sm font-mono" placeholder="Password" autoComplete="off" {...register(`voci.${i}.password`)} onKeyDown={e => onKeyDownVoce(e, i, 'password')} />
+
+                    {/* Allegato della riga */}
+                    <div className="flex items-center gap-1 min-w-0 h-8">
+                      <input
+                        type="file"
+                        className="hidden"
+                        ref={el => { inputFile.current[f.id] = el }}
+                        onChange={e => { scegliFile(f.id, e.target.files?.[0]); e.target.value = '' }}
+                      />
+                      {attesa ? (
+                        <>
+                          <span className="text-xs italic truncate text-amber-700" title={`${attesa.name} — verrà caricato al salvataggio`}>
+                            {attesa.name}
+                          </span>
+                          <button type="button" onClick={() => annullaFileInAttesa(f.id)} title="Annulla file" className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-destructive shrink-0">
+                            <X className="h-3.5 w-3.5" />
+                          </button>
+                        </>
+                      ) : esistente ? (
+                        <>
+                          <a href={urlDownload(esistente.fileUrl!)} title={`Scarica ${esistente.fileNome ?? 'file'}`} className="flex items-center gap-1 min-w-0 text-xs text-primary hover:underline">
+                            <Paperclip className="h-3.5 w-3.5 shrink-0" />
+                            <span className="truncate">{esistente.fileNome ?? 'file'}</span>
+                          </a>
+                          <button type="button" onClick={() => inputFile.current[f.id]?.click()} title="Sostituisci file" className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground shrink-0">
+                            <Pencil className="h-3 w-3" />
+                          </button>
+                          <button type="button" onClick={() => setFileDaRimuovere(prev => new Set(prev).add(f.id))} title="Rimuovi file" className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-destructive shrink-0">
+                            <X className="h-3.5 w-3.5" />
+                          </button>
+                        </>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => inputFile.current[f.id]?.click()}
+                          className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground px-1 py-1 rounded hover:bg-accent"
+                        >
+                          <Paperclip className="h-3.5 w-3.5" />
+                          {fileDaRimuovere.has(f.id) ? <span className="italic">rimosso · carica</span> : 'Carica file'}
+                        </button>
+                      )}
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => rimuoviRiga(i, f.id)}
+                      title="Elimina riga"
+                      className="h-8 w-7 flex items-center justify-center rounded hover:bg-accent text-muted-foreground hover:text-destructive"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                )
+              })}
+              <p className="text-[11px] text-muted-foreground">
+                Invio = campo successivo / nuova riga · Salva mantiene la finestra aperta · i file (max 4 MB) vengono caricati al salvataggio
+              </p>
             </div>
 
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>Annulla</Button>
+              <Button type="button" variant="outline" onClick={chiudiDialog}>Chiudi</Button>
+              <Button type="button" variant="secondary" disabled={saving} onClick={handleSubmit(d => onSubmit(d, true))}>
+                Salva e chiudi
+              </Button>
               <Button type="submit" disabled={saving}>{saving ? 'Salvataggio…' : 'Salva'}</Button>
             </DialogFooter>
           </form>

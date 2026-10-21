@@ -32,3 +32,15 @@ export const credenzialeInclude = {
   },
   voci: { orderBy: [{ ordine: 'asc' }, { id: 'asc' }] },
 } satisfies Prisma.CredenzialeInclude
+
+// Elimina da Vercel Blob i file allegati alle righe (errori solo loggati: il DB resta la fonte di verità)
+export async function eliminaFileVoci(urls: (string | null | undefined)[]) {
+  const daEliminare = urls.filter((u): u is string => !!u)
+  if (daEliminare.length === 0 || !process.env.BLOB_READ_WRITE_TOKEN) return
+  try {
+    const { del } = await import('@vercel/blob')
+    await del(daEliminare)
+  } catch (err) {
+    console.error('Eliminazione file credenziali non riuscita:', err)
+  }
+}
