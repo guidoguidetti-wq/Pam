@@ -5,7 +5,7 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { toast } from 'sonner'
-import { Bell, Loader2, Mic, MicOff, Plus, Trash2, X } from 'lucide-react'
+import { Bell, Loader2, Mic, MicOff, Pencil, Plus, Trash2, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
@@ -44,6 +44,7 @@ export default function RemindersWidget() {
   const [reminders, setReminders] = useState<Reminder[]>([])
   const [loading, setLoading] = useState(true)
   const [adding, setAdding] = useState(false)
+  const [editingId, setEditingId] = useState<number | null>(null)
   const [deletingId, setDeletingId] = useState<number | null>(null)
   const [speechSupported, setSpeechSupported] = useState(false)
   const [listening, setListening] = useState(false)
@@ -101,14 +102,30 @@ export default function RemindersWidget() {
 
   function chiudiForm() {
     stopListening()
-    form.reset()
+    form.reset({ testo: '' })
     setAdding(false)
+    setEditingId(null)
+  }
+
+  function apriNuovo() {
+    stopListening()
+    form.reset({ testo: '' })
+    setEditingId(null)
+    setAdding(true)
+  }
+
+  function apriModifica(r: Reminder) {
+    stopListening()
+    form.reset({ testo: r.testo })
+    setAdding(false)
+    setEditingId(r.id)
   }
 
   async function onSubmit(values: FormValues) {
     stopListening()
-    const res = await fetch('/api/reminder', {
-      method: 'POST',
+    const isEdit = editingId !== null
+    const res = await fetch(isEdit ? `/api/reminder/${editingId}` : '/api/reminder', {
+      method: isEdit ? 'PATCH' : 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(values),
     })
@@ -116,11 +133,15 @@ export default function RemindersWidget() {
       toast.error('Errore nel salvataggio del reminder')
       return
     }
-    const nuovo: Reminder = await res.json()
-    setReminders((r) => [nuovo, ...r])
-    toast.success('Reminder aggiunto')
-    form.reset()
-    setAdding(false)
+    const salvato: Reminder = await res.json()
+    if (isEdit) {
+      setReminders((r) => r.map((x) => (x.id === salvato.id ? salvato : x)))
+      toast.success('Reminder aggiornato')
+    } else {
+      setReminders((r) => [salvato, ...r])
+      toast.success('Reminder aggiunto')
+    }
+    chiudiForm()
   }
 
   async function elimina(id: number) {
@@ -137,6 +158,50 @@ export default function RemindersWidget() {
     }
   }
 
+  function renderForm(className: string) {
+    return (
+      <form onSubmit={form.handleSubmit(onSubmit)} className={className}>
+        <Textarea
+          {...form.register('testo')}
+          autoFocus
+          rows={2}
+          placeholder={speechSupported ? 'Scrivi o detta la nota da ricordare…' : 'Scrivi la nota da ricordare…'}
+          className="text-sm resize-none"
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) form.handleSubmit(onSubmit)()
+            if (e.key === 'Escape') chiudiForm()
+          }}
+        />
+        {form.formState.errors.testo && (
+          <p className="text-xs text-red-600">{form.formState.errors.testo.message}</p>
+        )}
+        <div className="flex items-center justify-between gap-2">
+          {speechSupported ? (
+            <Button
+              type="button"
+              size="sm"
+              variant={listening ? 'destructive' : 'outline'}
+              className={cn('h-8 gap-1.5', listening && 'animate-pulse')}
+              onClick={listening ? stopListening : startListening}
+            >
+              {listening ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
+              {listening ? 'Stop' : 'Detta'}
+            </Button>
+          ) : <span />}
+          <div className="flex gap-2">
+            <Button type="button" size="sm" variant="ghost" className="h-8" onClick={chiudiForm}>
+              <X className="h-4 w-4" />
+            </Button>
+            <Button type="submit" size="sm" className="h-8" disabled={form.formState.isSubmitting}>
+              {form.formState.isSubmitting && <Loader2 className="h-4 w-4 animate-spin mr-1" />}
+              Salva
+            </Button>
+          </div>
+        </div>
+      </form>
+    )
+  }
+
   return (
     <div className="rounded-lg border bg-card overflow-hidden">
       <div className="flex items-center justify-between px-4 py-2 border-b bg-amber-50 dark:bg-amber-950/20">
@@ -150,53 +215,13 @@ export default function RemindersWidget() {
           )}
         </div>
         {!adding && (
-          <Button size="sm" variant="ghost" className="h-7 gap-1 text-xs" onClick={() => setAdding(true)}>
+          <Button size="sm" variant="ghost" className="h-7 gap-1 text-xs" onClick={apriNuovo}>
             <Plus className="h-3.5 w-3.5" /> Nuovo
           </Button>
         )}
       </div>
 
-      {adding && (
-        <form onSubmit={form.handleSubmit(onSubmit)} className="p-3 border-b space-y-2">
-          <Textarea
-            {...form.register('testo')}
-            autoFocus
-            rows={2}
-            placeholder={speechSupported ? 'Scrivi o detta la nota da ricordare…' : 'Scrivi la nota da ricordare…'}
-            className="text-sm resize-none"
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) form.handleSubmit(onSubmit)()
-              if (e.key === 'Escape') chiudiForm()
-            }}
-          />
-          {form.formState.errors.testo && (
-            <p className="text-xs text-red-600">{form.formState.errors.testo.message}</p>
-          )}
-          <div className="flex items-center justify-between gap-2">
-            {speechSupported ? (
-              <Button
-                type="button"
-                size="sm"
-                variant={listening ? 'destructive' : 'outline'}
-                className={cn('h-8 gap-1.5', listening && 'animate-pulse')}
-                onClick={listening ? stopListening : startListening}
-              >
-                {listening ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
-                {listening ? 'Stop' : 'Detta'}
-              </Button>
-            ) : <span />}
-            <div className="flex gap-2">
-              <Button type="button" size="sm" variant="ghost" className="h-8" onClick={chiudiForm}>
-                <X className="h-4 w-4" />
-              </Button>
-              <Button type="submit" size="sm" className="h-8" disabled={form.formState.isSubmitting}>
-                {form.formState.isSubmitting && <Loader2 className="h-4 w-4 animate-spin mr-1" />}
-                Salva
-              </Button>
-            </div>
-          </div>
-        </form>
-      )}
+      {adding && renderForm('p-3 border-b space-y-2')}
 
       <div className="divide-y max-h-[140px] overflow-y-auto">
         {loading ? (
@@ -204,7 +229,9 @@ export default function RemindersWidget() {
         ) : reminders.length === 0 ? (
           <p className="px-4 py-4 text-xs text-muted-foreground text-center">Nessun reminder</p>
         ) : (
-          reminders.map((r) => (
+          reminders.map((r) => editingId === r.id ? (
+            <div key={r.id}>{renderForm('px-4 py-2 space-y-2 bg-amber-50/50 dark:bg-amber-950/10')}</div>
+          ) : (
             <div key={r.id} className="group px-4 py-2 flex items-start gap-3">
               <p className="flex-1 min-w-0 text-sm whitespace-pre-wrap break-words">{r.testo}</p>
               <span className="text-[10px] text-muted-foreground shrink-0 mt-0.5 tabular-nums">
@@ -213,7 +240,16 @@ export default function RemindersWidget() {
               <Button
                 size="icon"
                 variant="ghost"
-                className="h-6 w-6 shrink-0 text-muted-foreground hover:text-red-600"
+                className="h-6 w-6 shrink-0 text-muted-foreground hover:text-foreground"
+                onClick={() => apriModifica(r)}
+                title="Modifica"
+              >
+                <Pencil className="h-3.5 w-3.5" />
+              </Button>
+              <Button
+                size="icon"
+                variant="ghost"
+                className="h-6 w-6 -ml-2 shrink-0 text-muted-foreground hover:text-red-600"
                 onClick={() => elimina(r.id)}
                 disabled={deletingId === r.id}
                 title="Elimina"
