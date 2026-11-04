@@ -17,6 +17,7 @@ import { Button } from '@/components/ui/button'
 import { formatValuta, formatOre } from '@/lib/utils'
 import { cn } from '@/lib/utils'
 import Link from 'next/link'
+import RemindersWidget from './RemindersWidget'
 
 const MESI = ['Gen', 'Feb', 'Mar', 'Apr', 'Mag', 'Giu', 'Lug', 'Ago', 'Set', 'Ott', 'Nov', 'Dic']
 
@@ -229,10 +230,6 @@ export default function DashboardClient() {
     'Ore': m.oreErogate,
   }))
 
-  const totOre = data?.mesiStats.reduce((s, m) => s + m.oreErogate, 0) ?? 0
-  const totValore = data?.mesiStats.reduce((s, m) => s + m.valoreAttivita, 0) ?? 0
-  const totSpese = data?.mesiStats.reduce((s, m) => s + m.valoreSpese, 0) ?? 0
-
   const hasTodo = (data?.todoUrgenti ?? []).length > 0
   // Progetti stimati attivi, i più "consumati" in alto
   const progettiStimati = (data?.progetti ?? [])
@@ -262,28 +259,15 @@ export default function DashboardClient() {
         </div>
       </div>
 
+      {/* Reminders (al posto dei box KPI) */}
+      <RemindersWidget />
+
       {loading ? (
         <div className="flex justify-center items-center py-20">
           <Loader2 className="h-6 w-6 animate-spin" />
         </div>
       ) : (
         <>
-          {/* KPI cards */}
-          <div className="grid grid-cols-3 gap-3">
-            <div className="rounded-lg border bg-card p-3 space-y-0.5">
-              <p className="text-xs text-muted-foreground">Ore erogate</p>
-              <p className="text-xl font-bold tabular-nums">{formatOreDecimal(totOre)}</p>
-            </div>
-            <div className="rounded-lg border bg-card p-3 space-y-0.5">
-              <p className="text-xs text-muted-foreground">Competenze</p>
-              <p className="text-xl font-bold tabular-nums">{formatValuta(totValore)}</p>
-            </div>
-            <div className="rounded-lg border bg-card p-3 space-y-0.5">
-              <p className="text-xs text-muted-foreground">Spese</p>
-              <p className="text-xl font-bold tabular-nums">{formatValuta(totSpese)}</p>
-            </div>
-          </div>
-
           {/* Task urgenti + progetti stimati attivi, affiancati */}
           <div className={cn('grid gap-4 items-start', hasTodo && progettiStimati.length > 0 && 'lg:grid-cols-2')}>
             {/* Widget task urgenti */}

@@ -435,3 +435,13 @@ model CredenzialeVoce {
   @@index([credenzialeId])
   @@map("credenziale_voce")
 }
+
+// ─── REMINDERS (dashboard) ─────────────────────────────────
+
+model Reminder {
+  id        Int      @id @default(autoincrement())
+  testo     String   @db.Text
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  @@map("reminder")
+}
