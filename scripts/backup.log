@@ -11,3 +11,10 @@
 [2026-04-01 13:19:01] [INFO] Backup salvato: C:\PROGETTI_WEB\PAM\PAM_WEB\scripts\backups\pam_2026-04-01T13-19-01.json.gz (0.01 MB)
 [2026-04-01 13:19:01] [INFO] Backup totali conservati: 1
 [2026-04-01 13:19:01] [INFO] === Backup completato ===
+[2026-11-04 10:26:26] [INFO] === Avvio backup PAM ===
+[2026-11-04 10:26:26] [INFO] Configurazione da: C:\Users\ACER\OneDrive\Documenti\#__Clienti\GUIDO\PAM\PAM_WEB\.env.local
+[2026-11-04 10:26:26] [INFO] Connessione al database...
+[2026-11-04 10:26:28] [INFO] Record letti: {"_prisma_migrations":18,"allegato":29,"attivita":230,"backup_log":22,"cliente":20,"committente":5,"conto_banca":2,"credenziale":2,"credenziale_voce":11,"ente":121,"enticategorie":38,"listino":11,"movimento_bancario":525,"progetto":13,"progetto_stima":14,"progetto_stima_dettaglio":26,"progetto_tipo_attivita":20,"spesa":59,"tipo_attivita":7,"todo":20}
+[2026-11-04 10:26:28] [INFO] Backup salvato: C:\Users\ACER\OneDrive\Documenti\#__Clienti\GUIDO\PAM\PAM_WEB\scripts\backups\pam_2026-11-04T10-26-28.sql.gz (0.07 MB)
+[2026-11-04 10:26:28] [INFO] Backup totali conservati: 2
+[2026-11-04 10:26:28] [INFO] === Backup completato ===
