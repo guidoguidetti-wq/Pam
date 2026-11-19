@@ -420,13 +420,16 @@ model CredenzialeVoce {
   id            Int      @id @default(autoincrement())
   credenzialeId Int      @map("credenziale_id")
   descrizione   String?  @db.VarChar(500)
-  utente        String?  @db.VarChar(500)
-  password      String?  @db.VarChar(1000)
+  // utente e password sono cifrati nel browser (formato "v1:<iv>:<dati>", vedi src/lib/vault-crypto.ts)
+  utente        String?  @db.Text
+  password      String?  @db.Text
   // Allegato facoltativo della riga (file chiavi, certificati…) su Vercel Blob
   fileNome      String?  @map("file_nome") @db.VarChar(500)
   fileUrl       String?  @map("file_url") @db.Text
   fileKey       String?  @map("file_key") @db.Text
   fileSize      Int?     @map("file_size")
+  // true = il file su Blob è cifrato nel browser (iv + dati AES-GCM)
+  fileCifrato   Boolean  @default(false) @map("file_cifrato")
   ordine        Int      @default(0)
   createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz
 
@@ -434,6 +437,20 @@ model CredenzialeVoce {
 
   @@index([credenzialeId])
   @@map("credenziale_voce")
+}
+
+// Configurazione della cassaforte (riga unica, id = 1).
+// La chiave dati (casuale) è salvata cifrata con una chiave derivata dalla master password
+// (PBKDF2-SHA256): il server non conosce né la master password né la chiave dati.
+model VaultConfig {
+  id            Int      @id @default(1)
+  salt          String   @db.Text
+  iterazioni    Int
+  chiaveCifrata String   @map("chiave_cifrata") @db.Text
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt     DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@map("vault_config")
 }
 
 // ─── REMINDERS (dashboard) ─────────────────────────────────

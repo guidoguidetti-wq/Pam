@@ -8,7 +8,7 @@ export default auth((req) => {
   const isLoggedIn = !!req.auth
   const isAuthPage = req.nextUrl.pathname.startsWith('/login')
   const isApiAuth = req.nextUrl.pathname.startsWith('/api/auth')
-  const isPublicAsset = req.nextUrl.pathname === '/api/logo' || req.nextUrl.pathname === '/api/debug-auth'
+  const isPublicAsset = req.nextUrl.pathname === '/api/logo'
 
   if (isApiAuth || isPublicAsset) return NextResponse.next()
 

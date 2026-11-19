@@ -1,11 +1,13 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useFieldArray, useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { toast } from 'sonner'
-import { Plus, Pencil, Trash2, Copy, KeyRound, Search, X, Paperclip, Download } from 'lucide-react'
+import { Plus, Pencil, Trash2, Copy, KeyRound, Search, X, Paperclip, Download, Eye, EyeOff, Lock, ShieldAlert } from 'lucide-react'
+import VaultLock, { CambiaMasterDialog } from './VaultLock'
+import { cifraTesto, decifraTesto, cifraFile, decifraFile, isCifrato, type VaultConfigDati } from '@/lib/vault-crypto'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
@@ -23,9 +25,11 @@ type Voce = {
   fileNome: string | null
   fileUrl: string | null
   fileSize: number | null
+  fileCifrato: boolean
 }
 
-type Credenziale = {
+// Come arriva dal server (utente, password e note cifrati)
+type CredenzialeRaw = {
   id: number
   clienteId: number
   sezione: string
@@ -33,6 +37,73 @@ type Credenziale = {
   note: string | null
   cliente: Cliente
   voci: Voce[]
+}
+
+// Decifrata nel browser
+type Credenziale = CredenzialeRaw & {
+  // contiene ancora dati in chiaro (precedenti alla cifratura)
+  daCifrare: boolean
+  // decifratura non riuscita: dati nascosti e modifica disabilitata
+  errore: boolean
+}
+
+const BLOCCO_INATTIVITA_MS = 10 * 60 * 1000
+
+const inChiaro = (v: string | null) => v != null && !isCifrato(v)
+
+async function decifraCredenziale(key: CryptoKey, c: CredenzialeRaw): Promise<Credenziale> {
+  const daCifrare =
+    inChiaro(c.note) || c.voci.some(v => inChiaro(v.utente) || inChiaro(v.password) || (!!v.fileUrl && !v.fileCifrato))
+  try {
+    const voci = await Promise.all(
+      c.voci.map(async v => ({ ...v, utente: await decifraTesto(key, v.utente), password: await decifraTesto(key, v.password) }))
+    )
+    return { ...c, note: await decifraTesto(key, c.note), voci, daCifrare, errore: false }
+  } catch {
+    return {
+      ...c,
+      note: null,
+      voci: c.voci.map(v => ({ ...v, utente: null, password: null })),
+      daCifrare: false,
+      errore: true,
+    }
+  }
+}
+
+// Payload per POST/PUT: cifra utente, password e note
+async function payloadCifrato(
+  key: CryptoKey,
+  d: { clienteId: number; sezione: string; ambiente: string | null; note: string | null; voci: { id?: number; descrizione: string | null; utente: string | null; password: string | null }[] }
+) {
+  return {
+    clienteId: d.clienteId,
+    sezione: d.sezione,
+    ambiente: d.ambiente,
+    note: await cifraTesto(key, d.note),
+    voci: await Promise.all(
+      d.voci.map(async v => ({
+        id: v.id,
+        descrizione: v.descrizione,
+        utente: await cifraTesto(key, v.utente),
+        password: await cifraTesto(key, v.password),
+      }))
+    ),
+  }
+}
+
+// Cifra e carica l'allegato di una riga
+async function caricaFileCifrato(key: CryptoKey, voceId: number, nome: string, dati: ArrayBuffer) {
+  const fd = new FormData()
+  fd.append('file', await cifraFile(key, dati), 'file.bin')
+  fd.append('nomeFile', nome)
+  fd.append('cifrato', '1')
+  return fetch(`/api/password-manager/voci/${voceId}/allegato`, { method: 'POST', body: fd })
+}
+
+async function leggiFileRemoto(voceId: number): Promise<ArrayBuffer> {
+  const r = await fetch(`/api/password-manager/voci/${voceId}/allegato`)
+  if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error ?? 'Download non riuscito')
+  return r.arrayBuffer()
 }
 
 const voceFormSchema = z.object({
@@ -43,6 +114,7 @@ const voceFormSchema = z.object({
   // Solo visualizzazione: l'allegato si carica a parte dopo il salvataggio
   fileNome: z.string().nullable().optional(),
   fileUrl: z.string().nullable().optional(),
+  fileCifrato: z.boolean().optional(),
 })
 
 const formSchema = z.object({
@@ -56,12 +128,9 @@ const formSchema = z.object({
 type FormData = z.infer<typeof formSchema>
 
 const AMBIENTI_BASE = ['Produzione', 'Test', 'Sviluppo', 'Collaudo']
-const vuota = { descrizione: '', utente: '', password: '', fileNome: null, fileUrl: null }
+const vuota = { descrizione: '', utente: '', password: '', fileNome: null, fileUrl: null, fileCifrato: false }
 const CAMPI = ['descrizione', 'utente', 'password'] as const
 const MAX_FILE = 4 * 1024 * 1024
-
-// Link di download del file su Vercel Blob
-const urlDownload = (url: string) => `${url}${url.includes('?') ? '&' : '?'}download=1`
 
 function valoriForm(c: Credenziale): FormData {
   return {
@@ -77,6 +146,7 @@ function valoriForm(c: Credenziale): FormData {
         password: v.password ?? '',
         fileNome: v.fileNome,
         fileUrl: v.fileUrl,
+        fileCifrato: v.fileCifrato,
       })),
       // Riga vuota pronta per l'inserimento successivo
       vuota,
@@ -93,11 +163,17 @@ async function copia(testo: string, cosa: string) {
   }
 }
 
-function CampoCopiabile({ valore, cosa }: { valore: string | null; cosa: string }) {
+function CampoCopiabile({ valore, cosa, segreto }: { valore: string | null; cosa: string; segreto?: boolean }) {
+  const [visibile, setVisibile] = useState(false)
   if (!valore) return <span className="text-muted-foreground">—</span>
   return (
     <div className="flex items-center gap-1">
-      <span className="font-mono text-xs break-all">{valore}</span>
+      <span className="font-mono text-xs break-all">{segreto && !visibile ? '••••••••' : valore}</span>
+      {segreto && (
+        <button onClick={() => setVisibile(v => !v)} title={visibile ? 'Nascondi' : 'Mostra'} className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground shrink-0">
+          {visibile ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+        </button>
+      )}
       <button onClick={() => copia(valore, cosa)} title={`Copia ${cosa.toLowerCase()}`} className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground shrink-0">
         <Copy className="h-3.5 w-3.5" />
       </button>
@@ -131,10 +207,113 @@ export default function PasswordManagerView({ clienti }: { clienti: Cliente[] })
     setFileDaRimuovere(new Set())
   }
 
+  // Cassaforte: undefined = caricamento, null = da creare. La chiave vive solo in memoria.
+  const [vaultCfg, setVaultCfg] = useState<VaultConfigDati | null | undefined>(undefined)
+  const [key, setKey] = useState<CryptoKey | null>(null)
+  const [migrazione, setMigrazione] = useState<{ fatti: number; totale: number } | null>(null)
+
   useEffect(() => {
+    fetch('/api/password-manager/vault')
+      .then(r => (r.ok ? r.json() : Promise.reject(r)))
+      .then(setVaultCfg)
+      .catch(() => toast.error('Impossibile leggere la configurazione della cassaforte'))
+  }, [])
+
+  const blocca = useCallback(() => {
+    setKey(null)
+    setCredenziali([])
+    setDialogOpen(false)
+    azzeraFile()
+  }, [])
+
+  // Blocco automatico dopo un periodo di inattività
+  useEffect(() => {
+    if (!key) return
+    let t = setTimeout(blocca, BLOCCO_INATTIVITA_MS)
+    const attivita = () => {
+      clearTimeout(t)
+      t = setTimeout(blocca, BLOCCO_INATTIVITA_MS)
+    }
+    const eventi = ['mousedown', 'keydown', 'touchstart', 'scroll'] as const
+    eventi.forEach(e => window.addEventListener(e, attivita, { passive: true }))
+    return () => {
+      clearTimeout(t)
+      eventi.forEach(e => window.removeEventListener(e, attivita))
+    }
+  }, [key, blocca])
+
+  const carica = useCallback(async () => {
+    if (!key) return
     const url = filtroCliente !== 'all' ? `/api/password-manager?cliente_id=${filtroCliente}` : '/api/password-manager'
-    fetch(url).then(r => r.json()).then(setCredenziali).catch(console.error)
-  }, [filtroCliente])
+    try {
+      const raw: CredenzialeRaw[] = await fetch(url).then(r => r.json())
+      setCredenziali(await Promise.all(raw.map(c => decifraCredenziale(key, c))))
+    } catch (err) {
+      console.error(err)
+      toast.error('Errore caricamento credenziali')
+    }
+  }, [key, filtroCliente])
+
+  useEffect(() => { carica() }, [carica])
+
+  const numDaCifrare = credenziali.filter(c => c.daCifrare).length
+  const numErrori = credenziali.filter(c => c.errore).length
+
+  // Cifra i dati salvati prima dell'introduzione della cassaforte (testi e allegati)
+  async function cifraEsistenti() {
+    if (!key) return
+    const daFare = credenziali.filter(c => c.daCifrare)
+    if (!confirm(`Cifrare ${daFare.length} schede di credenziali salvate in chiaro? (assicurarsi di avere un backup)`)) return
+    setMigrazione({ fatti: 0, totale: daFare.length })
+    let errori = 0
+    for (const [n, c] of daFare.entries()) {
+      try {
+        const payload = await payloadCifrato(key, {
+          clienteId: c.clienteId,
+          sezione: c.sezione,
+          ambiente: c.ambiente,
+          note: c.note,
+          voci: c.voci.map(v => ({ id: v.id, descrizione: v.descrizione, utente: v.utente, password: v.password })),
+        })
+        const res = await fetch(`/api/password-manager/${c.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        })
+        if (!res.ok) throw new Error((await res.json()).error ?? 'errore')
+        for (const v of c.voci) {
+          if (!v.fileUrl || v.fileCifrato) continue
+          const r = await caricaFileCifrato(key, v.id, v.fileNome ?? 'file', await leggiFileRemoto(v.id))
+          if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error ?? 'errore allegato')
+        }
+      } catch (err) {
+        errori++
+        console.error(`Cifratura "${c.sezione}" non riuscita:`, err)
+      }
+      setMigrazione({ fatti: n + 1, totale: daFare.length })
+    }
+    setMigrazione(null)
+    await carica()
+    if (errori) toast.error(`${errori} schede non cifrate: riprovare`)
+    else toast.success('Tutte le credenziali sono ora cifrate')
+  }
+
+  async function scaricaAllegato(v: Pick<Voce, 'id' | 'fileNome' | 'fileCifrato'>) {
+    if (!key) return
+    try {
+      let dati = await leggiFileRemoto(v.id)
+      if (v.fileCifrato) dati = await decifraFile(key, dati)
+      const url = URL.createObjectURL(new Blob([dati]))
+      const a = document.createElement('a')
+      a.href = url
+      a.download = v.fileNome ?? 'file'
+      a.click()
+      setTimeout(() => URL.revokeObjectURL(url), 1000)
+    } catch (err) {
+      console.error(err)
+      toast.error('Download allegato non riuscito')
+    }
+  }
 
   const sezioniNote = useMemo(() => [...new Set(credenziali.map(c => c.sezione))].sort(), [credenziali])
   const ambientiNoti = useMemo(
@@ -221,13 +400,14 @@ export default function PasswordManagerView({ clienti }: { clienti: Cliente[] })
   }
 
   async function onSubmit(data: FormData, chiudi: boolean) {
+    if (!key) return
     setSaving(true)
     try {
       // Righe da salvare, con l'id del field array per ritrovare gli allegati scelti
       const righe = data.voci
         .map((v, i) => ({ v, fid: fields[i]?.id ?? '' }))
         .filter(({ v, fid }) => v.id || v.descrizione || v.utente || v.password || fileInAttesa[fid])
-      const payload = {
+      const payload = await payloadCifrato(key, {
         clienteId: data.clienteId,
         sezione: data.sezione,
         ambiente: data.ambiente || null,
@@ -238,7 +418,7 @@ export default function PasswordManagerView({ clienti }: { clienti: Cliente[] })
           utente: v.utente || null,
           password: v.password || null,
         })),
-      }
+      })
 
       const url = editing ? `/api/password-manager/${editing.id}` : '/api/password-manager'
       const res = await fetch(url, {
@@ -250,7 +430,7 @@ export default function PasswordManagerView({ clienti }: { clienti: Cliente[] })
         toast.error((await res.json()).error ?? 'Errore salvataggio')
         return
       }
-      const saved: Credenziale = await res.json()
+      const saved: CredenzialeRaw = await res.json()
 
       // Allegati: le voci salvate sono nello stesso ordine delle righe inviate
       const vociSalvate = [...saved.voci]
@@ -261,9 +441,7 @@ export default function PasswordManagerView({ clienti }: { clienti: Cliente[] })
         const file = fileInAttesa[fid]
         let r: Response | null = null
         if (file) {
-          const fd = new FormData()
-          fd.append('file', file)
-          r = await fetch(`/api/password-manager/voci/${voce.id}/allegato`, { method: 'POST', body: fd })
+          r = await caricaFileCifrato(key, voce.id, file.name, await file.arrayBuffer())
         } else if (v.id && fileDaRimuovere.has(fid) && voce.fileUrl) {
           r = await fetch(`/api/password-manager/voci/${voce.id}/allegato`, { method: 'DELETE' })
         }
@@ -275,7 +453,7 @@ export default function PasswordManagerView({ clienti }: { clienti: Cliente[] })
           toast.error(`Allegato "${file?.name ?? voce.fileNome}": ${msg}`)
         }
       }
-      const finale: Credenziale = { ...saved, voci: vociSalvate }
+      const finale = await decifraCredenziale(key, { ...saved, voci: vociSalvate })
 
       // Se il filtro cliente è attivo e il cliente è cambiato, la credenziale esce dall'elenco
       const visibile = filtroCliente === 'all' || finale.clienteId === parseInt(filtroCliente)
@@ -313,8 +491,38 @@ export default function PasswordManagerView({ clienti }: { clienti: Cliente[] })
   const ordina = (items: Credenziale[]) =>
     [...items].sort((a, b) => a.sezione.localeCompare(b.sezione) || (a.ambiente ?? '').localeCompare(b.ambiente ?? ''))
 
+  if (vaultCfg === undefined) return <div className="text-center py-12 text-muted-foreground text-sm">Caricamento…</div>
+  if (!key)
+    return (
+      <VaultLock
+        config={vaultCfg}
+        onSbloccato={(k, cfg) => {
+          setVaultCfg(cfg)
+          setKey(k)
+        }}
+      />
+    )
+
   return (
     <div className="space-y-4">
+      {/* Avvisi cassaforte */}
+      {numDaCifrare > 0 && (
+        <div className="flex flex-wrap items-center gap-3 border border-amber-300 bg-amber-50 dark:bg-amber-950/30 rounded-md px-3 py-2 text-sm">
+          <ShieldAlert className="h-4 w-4 text-amber-600 shrink-0" />
+          <span>
+            {numDaCifrare} {numDaCifrare === 1 ? 'scheda contiene' : 'schede contengono'} ancora dati o allegati in chiaro.
+          </span>
+          <Button size="sm" className="ml-auto" disabled={!!migrazione} onClick={cifraEsistenti}>
+            {migrazione ? `Cifratura ${migrazione.fatti}/${migrazione.totale}…` : 'Cifra ora'}
+          </Button>
+        </div>
+      )}
+      {numErrori > 0 && (
+        <div className="border border-destructive/50 bg-destructive/5 rounded-md px-3 py-2 text-sm text-destructive">
+          {numErrori} {numErrori === 1 ? 'scheda non è decifrabile' : 'schede non sono decifrabili'} con la chiave attuale (dati corrotti?): la modifica è disabilitata.
+        </div>
+      )}
+
       {/* Filtri */}
       <div className="flex flex-wrap items-center gap-2">
         <Select value={filtroCliente} onValueChange={setFiltroCliente}>
@@ -334,10 +542,17 @@ export default function PasswordManagerView({ clienti }: { clienti: Cliente[] })
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input className="pl-8" placeholder="Cerca sezione, ambiente, utente…" value={cerca} onChange={e => setCerca(e.target.value)} />
         </div>
-        <Button size="sm" className="ml-auto" onClick={openNew}>
-          <Plus className="h-4 w-4 mr-1.5" />
-          Nuove credenziali
-        </Button>
+        <div className="ml-auto flex flex-wrap items-center gap-2">
+          {vaultCfg && <CambiaMasterDialog config={vaultCfg} onCambiata={setVaultCfg} />}
+          <Button size="sm" variant="outline" onClick={blocca} title="Blocca la cassaforte">
+            <Lock className="h-4 w-4 mr-1.5" />
+            Blocca
+          </Button>
+          <Button size="sm" onClick={openNew}>
+            <Plus className="h-4 w-4 mr-1.5" />
+            Nuove credenziali
+          </Button>
+        </div>
       </div>
 
       {/* Elenco */}
@@ -364,8 +579,11 @@ export default function PasswordManagerView({ clienti }: { clienti: Cliente[] })
                         {c.ambiente}
                       </Badge>
                     )}
+                    {c.daCifrare && (
+                      <span title="Contiene dati in chiaro"><ShieldAlert className="h-3.5 w-3.5 text-amber-600" /></span>
+                    )}
                     <div className="ml-auto flex items-center gap-1">
-                      <button onClick={() => openEdit(c)} className="p-1.5 rounded hover:bg-accent text-muted-foreground hover:text-foreground">
+                      <button onClick={() => openEdit(c)} disabled={c.errore} className="p-1.5 rounded hover:bg-accent text-muted-foreground hover:text-foreground disabled:opacity-30">
                         <Pencil className="h-3.5 w-3.5" />
                       </button>
                       <button onClick={() => onDelete(c)} className="p-1.5 rounded hover:bg-accent text-muted-foreground hover:text-destructive">
@@ -391,18 +609,19 @@ export default function PasswordManagerView({ clienti }: { clienti: Cliente[] })
                           <tr key={v.id} className="align-top">
                             <td className="px-3 py-1.5 text-xs">{v.descrizione || <span className="text-muted-foreground">—</span>}</td>
                             <td className="px-3 py-1.5"><CampoCopiabile valore={v.utente} cosa="Utente" /></td>
-                            <td className="px-3 py-1.5"><CampoCopiabile valore={v.password} cosa="Password" /></td>
+                            <td className="px-3 py-1.5"><CampoCopiabile valore={v.password} cosa="Password" segreto /></td>
                             {c.voci.some(x => x.fileUrl) && (
                               <td className="px-3 py-1.5 max-w-[10rem]">
                                 {v.fileUrl ? (
-                                  <a
-                                    href={urlDownload(v.fileUrl)}
+                                  <button
+                                    type="button"
+                                    onClick={() => scaricaAllegato(v)}
                                     title={`Scarica ${v.fileNome ?? 'file'}`}
-                                    className="flex items-center gap-1 text-xs text-primary hover:underline"
+                                    className="flex items-center gap-1 min-w-0 max-w-full text-xs text-primary hover:underline"
                                   >
                                     <Download className="h-3.5 w-3.5 shrink-0" />
                                     <span className="truncate">{v.fileNome ?? 'file'}</span>
-                                  </a>
+                                  </button>
                                 ) : null}
                               </td>
                             )}
@@ -496,7 +715,7 @@ export default function PasswordManagerView({ clienti }: { clienti: Cliente[] })
                   <div key={f.id} className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_1fr_11rem_auto] gap-2 items-center border-b sm:border-0 pb-2 sm:pb-0">
                     <Input className="h-8 text-sm" placeholder="Descrizione" {...register(`voci.${i}.descrizione`)} onKeyDown={e => onKeyDownVoce(e, i, 'descrizione')} />
                     <Input className="h-8 text-sm" placeholder="Utente" autoComplete="off" {...register(`voci.${i}.utente`)} onKeyDown={e => onKeyDownVoce(e, i, 'utente')} />
-                    <Input className="h-8 text-sm font-mono" placeholder="Password" autoComplete="off" {...register(`voci.${i}.password`)} onKeyDown={e => onKeyDownVoce(e, i, 'password')} />
+                    <Input className="h-8 text-sm font-mono" placeholder="Password" autoComplete="off" spellCheck={false} {...register(`voci.${i}.password`)} onKeyDown={e => onKeyDownVoce(e, i, 'password')} />
 
                     {/* Allegato della riga */}
                     <div className="flex items-center gap-1 min-w-0 h-8">
@@ -517,10 +736,15 @@ export default function PasswordManagerView({ clienti }: { clienti: Cliente[] })
                         </>
                       ) : esistente ? (
                         <>
-                          <a href={urlDownload(esistente.fileUrl!)} title={`Scarica ${esistente.fileNome ?? 'file'}`} className="flex items-center gap-1 min-w-0 text-xs text-primary hover:underline">
+                          <button
+                            type="button"
+                            onClick={() => esistente.id && scaricaAllegato({ id: esistente.id, fileNome: esistente.fileNome ?? null, fileCifrato: !!esistente.fileCifrato })}
+                            title={`Scarica ${esistente.fileNome ?? 'file'}`}
+                            className="flex items-center gap-1 min-w-0 text-xs text-primary hover:underline"
+                          >
                             <Paperclip className="h-3.5 w-3.5 shrink-0" />
                             <span className="truncate">{esistente.fileNome ?? 'file'}</span>
-                          </a>
+                          </button>
                           <button type="button" onClick={() => inputFile.current[f.id]?.click()} title="Sostituisci file" className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground shrink-0">
                             <Pencil className="h-3 w-3" />
                           </button>
